@@ -4,12 +4,14 @@ import { roomTopic, supabase } from "@/lib/supabase";
 type View =
   | "live"
   | "activities"
+  | "bank"
   | "courses"
   | "assignments"
   | "qna"
   | "gamehub"
   | "radar"
   | "reports"
+  | "admin"
   | "integrations"
   | "settings";
 type QuestionKind =
@@ -21,6 +23,16 @@ type QuestionKind =
   | "scale"
   | "pin"
   | "code";
+type AccessibilityPrefs = {
+  contrast: boolean;
+  large: boolean;
+  motion: boolean;
+  labels: boolean;
+  readAloud: boolean;
+  extraTime: boolean;
+  focus: boolean;
+  hints: boolean;
+};
 type GameType =
   | "Quiz"
   | "Anket"
@@ -31,6 +43,7 @@ type Question = {
   q: string;
   a: string[];
   correct: number;
+  corrects?: number[];
   seconds?: number;
   image?: string;
   kind?: QuestionKind;
@@ -163,11 +176,15 @@ export default function Home() {
     [toast, setToast] = useState(""),
     [notificationsOpen, setNotificationsOpen] = useState(false),
     [unread, setUnread] = useState(3),
-    [accessibility, setAccessibility] = useState({
+    [accessibility, setAccessibility] = useState<AccessibilityPrefs>({
       contrast: false,
       large: false,
       motion: false,
       labels: true,
+      readAloud: false,
+      extraTime: false,
+      focus: false,
+      hints: false,
     });
   useEffect(() => {
     try {
@@ -238,11 +255,26 @@ export default function Home() {
         name={studentName}
         setName={setStudentName}
         teacher={() => setMode("teacher")}
-        join={() =>
-          code.length >= 5
+        join={async () => {
+          const clean = code.replace(/\s/g, "");
+          if (clean.length < 5) {
+            notify("5 veya 6 haneli oturum kodunu gir");
+            return;
+          }
+          if (clean === "481209") {
+            setMode("student");
+            return;
+          }
+          const { data } = await supabase
+            .from("dou_sessions")
+            .select("id,status")
+            .eq("join_code", clean)
+            .in("status", ["lobby", "question", "leaderboard"])
+            .maybeSingle();
+          data
             ? setMode("student")
-            : notify("5 veya 6 haneli oturum kodunu gir")
-        }
+            : notify("Bu kodla açık bir oturum bulunamadı");
+        }}
         toast={toast}
       />
     );
@@ -259,12 +291,14 @@ export default function Home() {
                   {
                     live: "Sınıf hazır. Oyunu başlatalım.",
                     activities: "Etkinlik stüdyosu",
+                    bank: "Ortak soru bankası",
                     courses: "Dersler ve sınıflar",
                     assignments: "Ödevler ve bağımsız çalışmalar",
                     qna: "Canlı soru & cevap",
                     gamehub: "Oyunlaştırma merkezi",
                     radar: "DOU Öğrenme Radarı",
                     reports: "Ders raporları",
+                    admin: "Kurumsal yönetim",
                     integrations: "Kurumsal bağlantılar",
                     settings: "Deneyim ayarları",
                   } as Record<View, string>
@@ -384,6 +418,15 @@ export default function Home() {
           />
         )}
         {view === "reports" && <Reports />}
+        {view === "bank" && (
+          <QuestionBank
+            add={(a) => {
+              setActivities((v) => [{ ...a, id: Date.now() }, ...v]);
+              notify("Şablon etkinliklerinize eklendi");
+            }}
+          />
+        )}
+        {view === "admin" && <AdminCenter />}
         {view === "courses" && <Courses notify={notify} />}
         {view === "assignments" && (
           <Assignments activities={activities} notify={notify} />
@@ -485,6 +528,12 @@ function Sidebar({
           <span>▦</span>Etkinliklerim
         </button>
         <button
+          className={view === "bank" ? "active" : ""}
+          onClick={() => setView("bank")}
+        >
+          <span>▧</span>Soru Bankası
+        </button>
+        <button
           className={view === "settings" ? "active" : ""}
           onClick={() => setView("settings")}
         >
@@ -501,6 +550,12 @@ function Sidebar({
           onClick={() => setView("reports")}
         >
           <span>▤</span>Ders Raporları
+        </button>
+        <button
+          className={view === "admin" ? "active" : ""}
+          onClick={() => setView("admin")}
+        >
+          <span>◇</span>Yönetim
         </button>
       </nav>
       <div className="sidebar-tip">
@@ -1081,6 +1136,7 @@ type QAItem = {
 };
 function LiveQA() {
   const [text, setText] = useState("");
+  const [moderationMessage, setModerationMessage] = useState("");
   const [items, setItems] = useState<QAItem[]>([
     {
       id: 1,
@@ -1106,6 +1162,14 @@ function LiveQA() {
   ]);
   const add = () => {
     if (!text.trim()) return;
+    if (
+      ["küfür", "salak", "aptal", "gerizekalı"].some((w) =>
+        text.toLocaleLowerCase("tr-TR").includes(w),
+      )
+    ) {
+      setModerationMessage("Soru sınıf güvenliği filtresine takıldı.");
+      return;
+    }
     setItems((v) => [
       {
         id: Date.now(),
@@ -1117,6 +1181,7 @@ function LiveQA() {
       ...v,
     ]);
     setText("");
+    setModerationMessage("");
   };
   return (
     <div className="qna-layout">
@@ -1138,6 +1203,9 @@ function LiveQA() {
           />
           <button onClick={add}>Gönder</button>
         </div>
+        {moderationMessage && (
+          <div className="moderation-warning">⚠ {moderationMessage}</div>
+        )}
         <div className="qa-list">
           {[...items]
             .sort(
@@ -1593,18 +1661,8 @@ function Settings({
   value,
   setValue,
 }: {
-  value: {
-    contrast: boolean;
-    large: boolean;
-    motion: boolean;
-    labels: boolean;
-  };
-  setValue: (v: {
-    contrast: boolean;
-    large: boolean;
-    motion: boolean;
-    labels: boolean;
-  }) => void;
+  value: AccessibilityPrefs;
+  setValue: (v: AccessibilityPrefs) => void;
 }) {
   const options: Array<[keyof typeof value, string, string]> = [
     [
@@ -1623,6 +1681,14 @@ function Settings({
       "Renk + şekil etiketleri",
       "Cevapları yalnızca renkle ayırt etmez",
     ],
+    [
+      "readAloud",
+      "Soruyu sesli oku",
+      "Öğrenci ekranında Türkçe sesli okuma sunar",
+    ],
+    ["extraTime", "Bireysel ek süre", "Sorular için yüzde 50 ek süre tanımlar"],
+    ["focus", "Odak modu", "Dikkat dağıtan puan ve efektleri azaltır"],
+    ["hints", "Öğrenme ipuçları", "Zor sorularda kavramsal destek gösterir"],
   ];
   return (
     <div className="settings-grid">
@@ -1666,6 +1732,210 @@ function Settings({
         </small>
       </aside>
     </div>
+  );
+}
+function QuestionBank({ add }: { add: (a: Activity) => void }) {
+  const [search, setSearch] = useState("");
+  const [level, setLevel] = useState("Tümü");
+  const samples: Activity[] = [
+    {
+      id: "tpl1",
+      type: "Quiz",
+      title: "Python · Döngüler ve Akış",
+      questions: 6,
+      plays: 342,
+      accent: "#d70926",
+      content: [
+        {
+          q: "range(5) hangi değerle başlar?",
+          a: ["0", "1", "5", "-1"],
+          correct: 0,
+          kind: "choice",
+          outcome: "ÖÇ-2",
+          bloom: "Uygulama",
+        },
+      ],
+    },
+    {
+      id: "tpl2",
+      type: "Takım Arenası",
+      title: "Linux · Yetki Laboratuvarı",
+      questions: 5,
+      plays: 188,
+      accent: "#6c4df6",
+      content: [
+        {
+          q: "En düşükten en yüksek yetkiye sırala",
+          a: ["guest", "user", "sudo", "root"],
+          correct: 0,
+          kind: "ranking",
+          outcome: "ÖÇ-3",
+          bloom: "Analiz",
+        },
+      ],
+    },
+    {
+      id: "tpl3",
+      type: "Kelime Bulutu",
+      title: "Siber Güvenlik · Risk Haritası",
+      questions: 3,
+      plays: 271,
+      accent: "#159a80",
+      content: [
+        {
+          q: "Bir kelimeyle en kritik güvenlik riski?",
+          a: ["phishing", "zararlı yazılım", "zayıf parola", "insan hatası"],
+          correct: 0,
+          kind: "open",
+          outcome: "PÇ-4",
+          bloom: "Değerlendirme",
+        },
+      ],
+    },
+    {
+      id: "tpl4",
+      type: "Anket",
+      title: "Ders Sonu Çıkış Bileti",
+      questions: 4,
+      plays: 514,
+      accent: "#f5a524",
+      content: [
+        {
+          q: "Bugünkü konuyu uygulayabilir misin?",
+          a: ["Evet", "Kısmen", "Örnek gerekli", "Tekrar gerekli"],
+          correct: 0,
+          kind: "scale",
+          outcome: "ÖÇ-1",
+          bloom: "Anlama",
+        },
+      ],
+    },
+  ];
+  const visible = samples.filter(
+    (x) =>
+      (level === "Tümü" || x.type === level) &&
+      x.title
+        .toLocaleLowerCase("tr-TR")
+        .includes(search.toLocaleLowerCase("tr-TR")),
+  );
+  return (
+    <>
+      <div className="module-hero">
+        <div>
+          <span className="overline">AKADEMİSYEN ORTAK ALANI</span>
+          <h2>Hazırla, paylaş, yeniden kullan.</h2>
+          <p>
+            DOU dersleri, öğrenme çıktıları ve Bloom düzeyleriyle etiketlenmiş
+            etkinlik şablonları.
+          </p>
+        </div>
+        <b className="bank-count">128 doğrulanmış içerik</b>
+      </div>
+      <div className="bank-toolbar">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Konu, ders veya kazanım ara…"
+        />
+        <select value={level} onChange={(e) => setLevel(e.target.value)}>
+          <option>Tümü</option>
+          <option>Quiz</option>
+          <option>Anket</option>
+          <option>Kelime Bulutu</option>
+          <option>Takım Arenası</option>
+        </select>
+      </div>
+      <div className="bank-grid">
+        {visible.map((a) => (
+          <article className="panel bank-card" key={a.id}>
+            <div style={{ background: a.accent }}>
+              <span>{types.find((t) => t.type === a.type)?.icon}</span>
+              <small>DOU ONAYLI</small>
+            </div>
+            <section>
+              <small>
+                {a.type} · {a.content?.[0]?.outcome} · {a.content?.[0]?.bloom}
+              </small>
+              <h3>{a.title}</h3>
+              <p>
+                {a.questions} soru · {a.plays} kullanım
+              </p>
+              <button onClick={() => add(a)}>＋ Kütüphaneme ekle</button>
+            </section>
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
+function AdminCenter() {
+  const departments = [
+    ["İnternet ve Ağ Teknolojileri", 84, 76],
+    ["Bilgisayar Programcılığı", 126, 81],
+    ["Bilişim Güvenliği", 68, 72],
+  ];
+  return (
+    <>
+      <div className="admin-hero">
+        <div>
+          <span>KURUMSAL PİLOT · 2026 GÜZ</span>
+          <h2>Katılımın akademik etkisini tek merkezden görün.</h2>
+        </div>
+        <button onClick={() => window.print()}>Yönetim özetini yazdır ↓</button>
+      </div>
+      <div className="metric-grid">
+        {[
+          ["Aktif akademisyen", "18", "+5"],
+          ["Aktif öğrenci", "278", "%91 katılım"],
+          ["Canlı oturum", "64", "Bu dönem"],
+          ["MEDEK kanıtı", "142", "Otomatik"],
+        ].map((x, i) => (
+          <article className="metric panel" key={x[0]}>
+            <span className={`metric-icon m${i}`}>◇</span>
+            <small>{x[0]}</small>
+            <strong>{x[1]}</strong>
+            <em>{x[2]}</em>
+          </article>
+        ))}
+      </div>
+      <div className="admin-grid">
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <small>PROGRAM PERFORMANSI</small>
+              <h3>Katılım ve öğrenme başarısı</h3>
+            </div>
+          </div>
+          {departments.map((d) => (
+            <div className="department-row" key={d[0] as string}>
+              <span>
+                <b>{d[0]}</b>
+                <small>{d[1]} öğrenci</small>
+              </span>
+              <i>
+                <em style={{ width: `${d[2]}%` }} />
+              </i>
+              <strong>%{d[2]}</strong>
+            </div>
+          ))}
+        </section>
+        <aside className="panel audit-log">
+          <small>SON İŞLEMLER</small>
+          <h3>Denetim günlüğü</h3>
+          {[
+            ["16:42", "BMT203 raporu oluşturuldu"],
+            ["15:18", "Yeni etkinlik ortak bankaya eklendi"],
+            ["13:05", "42 öğrenci oturuma katıldı"],
+            ["Dün", "ÖÇ-3 erken uyarısı üretildi"],
+          ].map((x) => (
+            <div key={x[1]}>
+              <b>{x[0]}</b>
+              <span>{x[1]}</span>
+            </div>
+          ))}
+        </aside>
+      </div>
+    </>
   );
 }
 function Builder({
@@ -2116,9 +2386,23 @@ function Builder({
               {current.a.map((a, i) => (
                 <label
                   key={i}
-                  className={`option-${i} ${current.correct === i ? "correct" : ""}`}
+                  className={`option-${i} ${(current.kind === "multiple" ? (current.corrects || [current.correct]).includes(i) : current.correct === i) ? "correct" : ""}`}
                 >
-                  <button onClick={() => update({ correct: i })}>
+                  <button
+                    onClick={() =>
+                      current.kind === "multiple"
+                        ? update({
+                            corrects: (
+                              current.corrects || [current.correct]
+                            ).includes(i)
+                              ? (current.corrects || [current.correct]).filter(
+                                  (x) => x !== i,
+                                )
+                              : [...(current.corrects || [current.correct]), i],
+                          })
+                        : update({ correct: i, corrects: [i] })
+                    }
+                  >
                     {optionMarks[i]}
                   </button>
                   <input
@@ -2132,7 +2416,15 @@ function Builder({
                     }
                     placeholder={`${i + 1}. cevap seçeneği`}
                   />
-                  <i>{current.correct === i ? "✓ DOĞRU" : ""}</i>
+                  <i>
+                    {(
+                      current.kind === "multiple"
+                        ? (current.corrects || [current.correct]).includes(i)
+                        : current.correct === i
+                    )
+                      ? "✓ DOĞRU"
+                      : ""}
+                  </i>
                 </label>
               ))}
             </div>
@@ -2200,6 +2492,9 @@ function Arena({
   const [players, setPlayers] = useState<Player[]>([]);
   const [answers, setAnswers] = useState(0);
   const [answerStats, setAnswerStats] = useState([0, 0, 0, 0]);
+  const [cloudWords, setCloudWords] = useState<
+    { text: string; count: number }[]
+  >([]);
   const [timeLeft, setTimeLeft] = useState(20);
   const [paused, setPaused] = useState(false);
   const [projection, setProjection] = useState(false);
@@ -2252,6 +2547,18 @@ function Arena({
       setAnswerStats((old) =>
         old.map((n, i) => (i === payload.answer ? n + 1 : n)),
       );
+      if (payload.answerText)
+        setCloudWords((old) => {
+          const clean = String(payload.answerText).trim().slice(0, 40);
+          const found = old.find(
+            (w) =>
+              w.text.toLocaleLowerCase("tr-TR") ===
+              clean.toLocaleLowerCase("tr-TR"),
+          );
+          return found
+            ? old.map((w) => (w === found ? { ...w, count: w.count + 1 } : w))
+            : [...old, { text: clean, count: 1 }];
+        });
       if (payload.correct)
         setPlayers((old) =>
           old.map((p) =>
@@ -2297,6 +2604,7 @@ function Arena({
     setRound(nextRound);
     setAnswers(0);
     setAnswerStats([0, 0, 0, 0]);
+    setCloudWords([]);
     setTimeLeft(gameQuestions[nextRound % gameQuestions.length].seconds || 20);
     channelRef.current?.send({
       type: "broadcast",
@@ -2468,18 +2776,44 @@ function Arena({
                 <img src={current.image} alt="Soru görseli" />
               </div>
             )}
-            <div>
-              {current.a.map((a, i) => (
-                <button key={a} className={`game-option option-${i}`}>
-                  <b>{optionMarks[i]}</b>
-                  <span>{a}</span>
+            {type === "Kelime Bulutu" ? (
+              <div className="live-word-cloud">
+                {cloudWords.length ? (
+                  cloudWords.map((w, i) => (
+                    <span
+                      key={w.text}
+                      style={{
+                        fontSize: `${18 + Math.min(w.count * 7, 32)}px`,
+                        color: ["#d70926", "#6c4df6", "#159a80", "#1d1d1b"][
+                          i % 4
+                        ],
+                      }}
+                    >
+                      {w.text}
+                    </span>
+                  ))
+                ) : (
                   <small>
-                    {answers ? Math.round((answerStats[i] / answers) * 100) : 0}
-                    %
+                    Yanıtlar geldikçe kelime bulutu burada oluşacak…
                   </small>
-                </button>
-              ))}
-            </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                {current.a.map((a, i) => (
+                  <button key={a} className={`game-option option-${i}`}>
+                    <b>{optionMarks[i]}</b>
+                    <span>{a}</span>
+                    <small>
+                      {answers
+                        ? Math.round((answerStats[i] / answers) * 100)
+                        : 0}
+                      %
+                    </small>
+                  </button>
+                ))}
+              </div>
+            )}
             <footer>
               <span>{players.length} bağlı öğrenci</span>
               <button onClick={() => broadcast("leaderboard")}>
@@ -2589,6 +2923,10 @@ function StudentStage({
   const [hiddenOptions, setHiddenOptions] = useState<number[]>([]);
   const [spotlight, setSpotlight] = useState("");
   const [openText, setOpenText] = useState("");
+  const [selectedMany, setSelectedMany] = useState<number[]>([]);
+  const [rankOrder, setRankOrder] = useState<number[]>([0, 1, 2, 3]);
+  const [inputError, setInputError] = useState("");
+  const [supports, setSupports] = useState<Partial<AccessibilityPrefs>>({});
   const startedAtRef = useRef(Date.now());
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const team: "Kırmızı" | "Siyah" =
@@ -2596,6 +2934,9 @@ function StudentStage({
 
   useEffect(() => {
     try {
+      setSupports(
+        JSON.parse(localStorage.getItem("dou-accessibility") || "{}"),
+      );
       localStorage.setItem(`dou-player-${cleanCode}`, idRef.current);
       const saved = JSON.parse(
         localStorage.getItem(`dou-progress-${cleanCode}`) || "null",
@@ -2625,11 +2966,25 @@ function StudentStage({
       setRound(payload.round);
       if (payload.question) setQuestion(payload.question);
       if (payload.type) setGameType(payload.type);
-      if (payload.question) setTimeLeft(payload.question.seconds || 20);
+      if (payload.question)
+        setTimeLeft(
+          Math.round(
+            (payload.question.seconds || 20) * (supports.extraTime ? 1.5 : 1),
+          ),
+        );
       if (payload.startedAt) startedAtRef.current = payload.startedAt;
       setAnswer(null);
       setFeedback(null);
       setHiddenOptions([]);
+      setSelectedMany([]);
+      setOpenText("");
+      setInputError("");
+      if (payload.question?.kind === "ranking")
+        setRankOrder(
+          payload.question.a
+            .map((_: string, i: number) => i)
+            .sort(() => Math.random() - 0.5),
+        );
     });
     channel.on("broadcast", { event: "moderation" }, ({ payload }) => {
       if (payload.action === "remove" && payload.id === idRef.current) onExit();
@@ -2652,7 +3007,7 @@ function StudentStage({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [cleanCode, name]);
+  }, [cleanCode, name, supports.extraTime]);
 
   useEffect(() => {
     if (phase !== "question") return;
@@ -2663,13 +3018,14 @@ function StudentStage({
     return () => window.clearInterval(timer);
   }, [phase, round]);
 
-  const choose = (i: number) => {
+  const choose = (i: number, answerText?: string, forcedCorrect?: boolean) => {
     if (answer !== null) return;
     setAnswer(i);
     const correct =
-      gameType === "Anket" ||
-      gameType === "Kelime Bulutu" ||
-      i === question.correct;
+      forcedCorrect ??
+      (gameType === "Anket" ||
+        gameType === "Kelime Bulutu" ||
+        i === question.correct);
     const speedBonus = Math.max(
       0,
       400 - Math.floor((Date.now() - startedAtRef.current) / 25),
@@ -2691,9 +3047,50 @@ function StudentStage({
         points,
         streak: nextStreak,
         round,
+        answerText,
       },
     });
   };
+  const submitText = () => {
+    const clean = openText.trim();
+    const blocked = ["küfür", "salak", "aptal", "gerizekalı"].some((w) =>
+      clean.toLocaleLowerCase("tr-TR").includes(w),
+    );
+    if (!clean) {
+      setInputError("Yanıtını yazmalısın.");
+      return;
+    }
+    if (blocked) {
+      setInputError("Bu ifade sınıf güvenliği filtresine takıldı.");
+      return;
+    }
+    const exact =
+      clean.toLocaleLowerCase("tr-TR") ===
+      question.a[question.correct]?.trim().toLocaleLowerCase("tr-TR");
+    choose(
+      question.correct,
+      clean,
+      gameType === "Kelime Bulutu" || gameType === "Hızlı Görev" || exact,
+    );
+  };
+  const submitMultiple = () => {
+    const expected = [...(question.corrects || [question.correct])]
+      .sort()
+      .join(",");
+    choose(
+      question.correct,
+      undefined,
+      [...selectedMany].sort().join(",") === expected,
+    );
+  };
+  const moveRank = (at: number, dir: number) =>
+    setRankOrder((v) => {
+      const n = [...v],
+        to = at + dir;
+      if (to < 0 || to >= n.length) return v;
+      [n[at], n[to]] = [n[to], n[at]];
+      return n;
+    });
   const useFifty = () => {
     if (fiftyUsed || answer !== null) return;
     const wrong = question.a
@@ -2722,7 +3119,7 @@ function StudentStage({
   };
 
   return (
-    <main className="student-stage">
+    <main className={`student-stage ${supports.focus ? "student-focus" : ""}`}>
       <header>
         <Logo dark />
         <span>
@@ -2763,6 +3160,21 @@ function StudentStage({
             {timeLeft}
           </div>
           <h1>{question.q}</h1>
+          {supports.readAloud && (
+            <button
+              className="read-aloud"
+              onClick={() => {
+                speechSynthesis.cancel();
+                speechSynthesis.speak(
+                  new SpeechSynthesisUtterance(
+                    `${question.q}. ${question.a.join(". ")}`,
+                  ),
+                );
+              }}
+            >
+              🔊 Soruyu sesli oku
+            </button>
+          )}
           <span className="student-kind">
             {gameType === "Kelime Bulutu"
               ? "Tek kelimeyle katkı ver"
@@ -2799,6 +3211,12 @@ function StudentStage({
             </button>
             <span>Doğru seri: 🔥 {streak}</span>
           </div>
+          {supports.hints && (
+            <div className="learning-hint">
+              💡 İpucu: Sorudaki ana kavramı önce kendi cümlenle tanımlamayı
+              dene.
+            </div>
+          )}
           {question.kind === "pin" ? (
             <div className="pin-instruction">
               Görsel üzerinde doğru olduğunu düşündüğün noktaya dokun.
@@ -2812,21 +3230,70 @@ function StudentStage({
                 onChange={(e) => setOpenText(e.target.value)}
                 placeholder="Yanıtını yaz…"
               />
+              <button onClick={submitText}>Yanıtı kilitle →</button>
+              {inputError && (
+                <small className="input-error">{inputError}</small>
+              )}
+            </div>
+          ) : question.kind === "multiple" ? (
+            <div className="multi-answer-wrap">
+              <div className="student-answers">
+                {question.a.map((a, i) => (
+                  <button
+                    key={a}
+                    className={`game-option option-${i} ${selectedMany.includes(i) ? "selected" : ""}`}
+                    onClick={() =>
+                      setSelectedMany((v) =>
+                        v.includes(i) ? v.filter((x) => x !== i) : [...v, i],
+                      )
+                    }
+                    disabled={answer !== null}
+                  >
+                    <b>{selectedMany.includes(i) ? "✓" : optionMarks[i]}</b>
+                    <span>{a}</span>
+                  </button>
+                ))}
+              </div>
               <button
+                className="lock-answer"
+                onClick={submitMultiple}
+                disabled={!selectedMany.length || answer !== null}
+              >
+                Seçimleri kilitle →
+              </button>
+            </div>
+          ) : question.kind === "ranking" ? (
+            <div className="ranking-board">
+              {rankOrder.map((item, i) => (
+                <div key={item}>
+                  <b>{i + 1}</b>
+                  <span>{question.a[item]}</span>
+                  <button
+                    onClick={() => moveRank(i, -1)}
+                    disabled={i === 0 || answer !== null}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    onClick={() => moveRank(i, 1)}
+                    disabled={i === rankOrder.length - 1 || answer !== null}
+                  >
+                    ↓
+                  </button>
+                </div>
+              ))}
+              <button
+                className="lock-answer"
                 onClick={() =>
                   choose(
-                    gameType === "Kelime Bulutu" ||
-                      gameType === "Hızlı Görev" ||
-                      openText.trim().toLocaleLowerCase("tr-TR") ===
-                        question.a[question.correct]
-                          ?.trim()
-                          .toLocaleLowerCase("tr-TR")
-                      ? question.correct
-                      : -1,
+                    question.correct,
+                    undefined,
+                    rankOrder.every((x, i) => x === i),
                   )
                 }
+                disabled={answer !== null}
               >
-                Yanıtı kilitle →
+                Sıralamayı kilitle →
               </button>
             </div>
           ) : question.kind === "scale" ? (
@@ -2843,9 +3310,7 @@ function StudentStage({
               ))}
             </div>
           ) : (
-            <div
-              className={`student-answers ${question.kind === "ranking" ? "ranking-answers" : ""}`}
-            >
+            <div className="student-answers">
               {question.a.map((a, i) => (
                 <button
                   className={`game-option option-${i} ${answer === i ? "selected" : ""}`}

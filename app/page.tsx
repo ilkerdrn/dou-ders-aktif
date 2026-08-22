@@ -3097,7 +3097,7 @@ function Arena({
                 )}
               </div>
             ) : (
-              <div>
+              <div className="host-answer-grid">
                 {current.a.map((a, i) => (
                   <button key={a} className={`game-option option-${i}`}>
                     <b>{optionMarks[i]}</b>

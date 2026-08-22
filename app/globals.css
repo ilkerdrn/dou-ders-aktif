@@ -2503,6 +2503,72 @@ button {
   }
 }
 
+/* V13 · kurumsal bağlantı tamamlanana kadar güvenli demo erişimi */
+.demo-access {
+  display: grid;
+  gap: 9px;
+  margin-top: 14px;
+  text-align: center;
+}
+.demo-access > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #8b878a;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.demo-access > span:before,
+.demo-access > span:after {
+  height: 1px;
+  flex: 1;
+  background: #e7e3e4;
+  content: "";
+}
+.demo-access > button {
+  display: grid;
+  min-height: 50px;
+  grid-template-columns: 28px 1fr 20px;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #d8d3d4;
+  border-radius: 13px;
+  background: #fff;
+  color: #181717;
+  cursor: pointer;
+  box-shadow: 0 5px 0 #181717;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.demo-access > button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 7px 0 #181717;
+}
+.demo-access > button i {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: #fff0f2;
+  color: var(--red);
+  font-size: 10px;
+  font-style: normal;
+}
+.demo-access > button b {
+  text-align: left;
+  font-size: 13px;
+}
+.demo-access > button em {
+  color: var(--red);
+  font-style: normal;
+  font-weight: 900;
+}
+.demo-access > small {
+  color: #777175;
+  font-size: 10px;
+}
+
 .connection-badge {
   display: inline-flex;
   align-items: center;

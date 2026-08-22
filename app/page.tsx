@@ -7,8 +7,10 @@ type View =
   | "courses"
   | "assignments"
   | "qna"
+  | "gamehub"
   | "radar"
   | "reports"
+  | "integrations"
   | "settings";
 type QuestionKind =
   | "choice"
@@ -228,8 +230,10 @@ export default function Home() {
                     courses: "Dersler ve sınıflar",
                     assignments: "Ödevler ve bağımsız çalışmalar",
                     qna: "Canlı soru & cevap",
+                    gamehub: "Oyunlaştırma merkezi",
                     radar: "DOU Öğrenme Radarı",
                     reports: "Ders raporları",
+                    integrations: "Kurumsal bağlantılar",
                     settings: "Deneyim ayarları",
                   } as Record<View, string>
                 )[view]
@@ -353,7 +357,11 @@ export default function Home() {
           <Assignments activities={activities} notify={notify} />
         )}
         {view === "qna" && <LiveQA />}
+        {view === "gamehub" && <GameHub notify={notify} />}
         {view === "radar" && <LearningRadar />}
+        {view === "integrations" && (
+          <IntegrationCenter notify={notify} activities={activities} />
+        )}
         {view === "settings" && (
           <Settings value={accessibility} setValue={setAccessibility} />
         )}
@@ -425,6 +433,12 @@ function Sidebar({
         >
           <span>?</span>Soru & Cevap
         </button>
+        <button
+          className={view === "gamehub" ? "active" : ""}
+          onClick={() => setView("gamehub")}
+        >
+          <span>♛</span>Oyun Merkezi
+        </button>
         <small className="nav-label">İÇGÖRÜ</small>
         <button
           className={view === "radar" ? "active" : ""}
@@ -443,6 +457,12 @@ function Sidebar({
           onClick={() => setView("settings")}
         >
           <span>⚙</span>Ayarlar
+        </button>
+        <button
+          className={view === "integrations" ? "active" : ""}
+          onClick={() => setView("integrations")}
+        >
+          <span>⇄</span>Entegrasyonlar
         </button>
         <button
           className={view === "reports" ? "active" : ""}
@@ -1245,6 +1265,257 @@ function LearningRadar() {
     </>
   );
 }
+function GameHub({ notify }: { notify: (s: string) => void }) {
+  const [season, setSeason] = useState(2);
+  const [teams, setTeams] = useState([
+    { name: "Algoritma Avcıları", xp: 8420, color: "#d70926", streak: 7 },
+    { name: "Byte Birliği", xp: 7960, color: "#6c4df6", streak: 5 },
+    { name: "Kernel Ekibi", xp: 7310, color: "#159a80", streak: 4 },
+  ]);
+  const boost = (i: number) => {
+    setTeams((v) =>
+      v.map((x, j) =>
+        j === i ? { ...x, xp: x.xp + 250, streak: x.streak + 1 } : x,
+      ),
+    );
+    notify("Takıma +250 XP sürpriz bonus verildi");
+  };
+  return (
+    <>
+      <div className="gamehub-hero">
+        <div>
+          <span>SEZON {season} · 18 GÜN KALDI</span>
+          <h2>Öğrenme bir sınıf macerasına dönüşsün.</h2>
+          <p>
+            Seriler, takım ligleri, rozetler ve risk–ödül turları; not yerine
+            ilerlemeyi görünür kılar.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            setSeason((v) => v + 1);
+            notify("Yeni sezon taslağı oluşturuldu");
+          }}
+        >
+          ＋ Yeni sezon
+        </button>
+      </div>
+      <div className="gamehub-grid">
+        <section className="panel league">
+          <div className="panel-title">
+            <div>
+              <small>TAKIM LİGİ</small>
+              <h3>Haftanın sıralaması</h3>
+            </div>
+            <b>🔥 12 aktif seri</b>
+          </div>
+          {[...teams]
+            .sort((a, b) => b.xp - a.xp)
+            .map((t, i) => (
+              <article key={t.name}>
+                <strong>{i + 1}</strong>
+                <i style={{ background: t.color }}>
+                  {t.name.slice(0, 2).toUpperCase()}
+                </i>
+                <span>
+                  <b>{t.name}</b>
+                  <small>🔥 {t.streak} tur seri</small>
+                </span>
+                <em>{t.xp.toLocaleString("tr-TR")} XP</em>
+                <button onClick={() => boost(teams.indexOf(t))}>Bonus</button>
+              </article>
+            ))}
+        </section>
+        <aside className="panel powerups">
+          <small>OYUN YÖNETMENİ</small>
+          <h3>Canlı güç kartları</h3>
+          {[
+            ["⚡", "2X Seri", "Sonraki doğru cevap iki kat XP"],
+            ["◐", "50:50", "İki yanlış şıkkı kaldır"],
+            ["🛡", "Seri Kalkanı", "Bir yanlışta seri bozulmasın"],
+            ["🎲", "Risk Turu", "Puanın %25'ini final sorusuna yatır"],
+          ].map(([icon, title, desc]) => (
+            <button
+              key={title}
+              onClick={() => notify(`${title} sıradaki tura eklendi`)}
+            >
+              <i>{icon}</i>
+              <span>
+                <b>{title}</b>
+                <small>{desc}</small>
+              </span>
+              <em>＋</em>
+            </button>
+          ))}
+        </aside>
+        <section className="panel badge-vault">
+          <div>
+            <small>ROZET KASASI</small>
+            <h3>Yetkinlik kanıtları</h3>
+          </div>
+          {[
+            ["◆", "Algoritma Ustası", "120 / 150"],
+            ["▣", "Takım Oyuncusu", "8 / 10"],
+            ["◎", "Soru Kaşifi", "24 / 25"],
+            ["♛", "Hafta Lideri", "Kazanıldı"],
+          ].map(([i, n, p], x) => (
+            <article className={x === 3 ? "earned" : ""} key={n}>
+              <i>{i}</i>
+              <b>{n}</b>
+              <small>{p}</small>
+            </article>
+          ))}
+        </section>
+        <section className="panel mission">
+          <span>HAFTALIK SINIF GÖREVİ</span>
+          <h3>“Bir arkadaşına öğret” zinciri</h3>
+          <p>
+            Her takım bir kavramı 60 saniyede açıklar. Sınıf oylamasıyla en
+            açıklayıcı örnek seçilir.
+          </p>
+          <div>
+            <i>
+              <em style={{ width: "72%" }} />
+            </i>
+            <b>72%</b>
+          </div>
+          <button onClick={() => notify("Görev canlı oturuma eklendi")}>
+            Görevi başlat →
+          </button>
+        </section>
+      </div>
+    </>
+  );
+}
+function IntegrationCenter({
+  notify,
+  activities,
+}: {
+  notify: (s: string) => void;
+  activities: Activity[];
+}) {
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+  const login = async () => {
+    if (!email.includes("@")) {
+      notify("Kurumsal e-posta adresini gir");
+      return;
+    }
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    if (error) notify(error.message);
+    else {
+      setSent(true);
+      notify("Güvenli giriş bağlantısı gönderildi");
+    }
+  };
+  const [tested, setTested] = useState<string[]>([]);
+  const test = (name: string) => {
+    setTested((v) => (v.includes(name) ? v : [...v, name]));
+    notify(`${name} bağlantı doğrulama akışı hazır`);
+  };
+  const syncCloud = async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
+      notify("Önce kurumsal e-posta ile giriş yap");
+      return;
+    }
+    const { error: removeError } = await supabase
+      .from("dou_activities")
+      .delete()
+      .eq("owner_id", data.user.id);
+    if (removeError) {
+      notify("Bulut eşitleme başlatılamadı");
+      return;
+    }
+    const { error } = await supabase.from("dou_activities").insert(
+      activities.map((a) => ({
+        owner_id: data.user!.id,
+        title: a.title,
+        game_type: a.type,
+        content: a.content || [],
+        outcome_map: { shuffle: a.shuffle || false },
+      })),
+    );
+    notify(
+      error
+        ? "Bulut eşitlemede hata oluştu"
+        : `${activities.length} etkinlik güvenli buluta eşitlendi`,
+    );
+  };
+  return (
+    <div className="integration-layout">
+      <section>
+        <div className="module-hero">
+          <div>
+            <span className="overline">KURUMSAL VERİ AKIŞI</span>
+            <h2>Ders verisi yeniden girilmesin.</h2>
+            <p>
+              ÖBS, LMS ve kurumsal kimlik sağlayıcılarını güvenli bağlantı
+              noktaları üzerinden eşleştirin.
+            </p>
+          </div>
+          <div className="hero-sync">
+            <span className="secure-badge">● KVKK ODAKLI</span>
+            <button onClick={syncCloud}>☁ Etkinlikleri buluta eşitle</button>
+          </div>
+        </div>
+        <div className="connector-grid">
+          {[
+            ["ÖBS / SIS", "Ders, şube ve öğrenci listesi", "⇄"],
+            ["Moodle / LMS", "Etkinlik, ödev ve not aktarımı", "M"],
+            ["Microsoft 365", "Kurumsal SSO ve Teams", "▦"],
+            ["Google Workspace", "SSO ve Classroom", "G"],
+            ["Excel / CSV", "Toplu öğrenci ve soru aktarımı", "X"],
+            ["LTI 1.3", "Standart LMS araç bağlantısı", "LTI"],
+          ].map(([name, desc, icon]) => (
+            <article className="panel connector" key={name}>
+              <i>{icon}</i>
+              <div>
+                <h3>{name}</h3>
+                <p>{desc}</p>
+              </div>
+              <span className={tested.includes(name) ? "ready" : ""}>
+                {tested.includes(name) ? "Doğrulandı" : "Yapılandırılmadı"}
+              </span>
+              <button onClick={() => test(name)}>
+                {tested.includes(name) ? "Yeniden test et" : "Bağlantıyı kur"}
+              </button>
+            </article>
+          ))}
+        </div>
+      </section>
+      <aside className="panel auth-center">
+        <span className="overline">AKADEMİSYEN OTURUMU</span>
+        <h3>Şifresiz güvenli giriş</h3>
+        <p>Kurumsal e-postaya tek kullanımlık giriş bağlantısı gönderilir.</p>
+        {sent ? (
+          <div className="auth-success">
+            ✓ Bağlantı gönderildi.
+            <small>E-postayı aynı cihazda açarak oturumu tamamlayın.</small>
+          </div>
+        ) : (
+          <>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="ad.soyad@dogus.edu.tr"
+            />
+            <button onClick={login}>Giriş bağlantısı gönder →</button>
+          </>
+        )}
+        <hr />
+        <small>
+          Gerçek ÖBS/SSO bağlantısı için kurumun istemci kimliği, servis adresi
+          ve yetkilendirmesi gerekir. Bu bilgiler eklenmeden öğrenci verisi
+          aktarılmaz.
+        </small>
+      </aside>
+    </div>
+  );
+}
 function Settings({
   value,
   setValue,
@@ -1489,6 +1760,56 @@ function Builder({
     reader.onload = () => update({ image: String(reader.result) });
     reader.readAsDataURL(file);
   };
+  const importQuestions = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const raw = String(reader.result || "");
+        const parsed: Question[] = file.name.endsWith(".json")
+          ? JSON.parse(raw)
+          : raw
+              .split(/\r?\n/)
+              .slice(1)
+              .filter(Boolean)
+              .map((line) => {
+                const [
+                  q,
+                  a1,
+                  a2,
+                  a3,
+                  a4,
+                  correct = "1",
+                  outcome = "ÖÇ-1",
+                  bloom = "Uygulama",
+                ] = line.split(";");
+                return {
+                  q,
+                  a: [a1, a2, a3, a4],
+                  correct: Math.max(0, Number(correct) - 1),
+                  seconds: 20,
+                  kind: "choice",
+                  outcome,
+                  bloom,
+                };
+              });
+        if (!Array.isArray(parsed) || !parsed.length) throw new Error();
+        setQuestions(
+          parsed.map((q) => ({
+            ...blank(),
+            ...q,
+            a: q.a?.length ? q.a : ["", "", "", ""],
+          })),
+        );
+        setActive(0);
+      } catch {
+        alert(
+          "Dosya okunamadı. CSV ayırıcı olarak noktalı virgül kullanmalı veya geçerli JSON olmalı.",
+        );
+      }
+    };
+    reader.readAsText(file, "UTF-8");
+  };
   const finish = () =>
     save({
       id: initial?.id || Date.now(),
@@ -1543,6 +1864,14 @@ function Builder({
           >
             ✦ Akıllı soru üret
           </button>
+          <label className="import-button">
+            ⇧ CSV / JSON içe aktar
+            <input
+              type="file"
+              accept=".csv,.json"
+              onChange={(e) => importQuestions(e.target.files?.[0])}
+            />
+          </label>
         </div>
         {generatorOpen && (
           <div className="smart-generator">
@@ -1958,6 +2287,23 @@ function Arena({
                 ⏱ {timeLeft} sn · {answers} yanıt
               </b>
             </div>
+            <span className="interaction-label">
+              {
+                (
+                  {
+                    choice: "TEK SEÇİM",
+                    multiple: "ÇOKLU DOĞRU",
+                    truefalse: "DOĞRU / YANLIŞ",
+                    open: "AÇIK UÇLU",
+                    ranking: "SIRALAMA",
+                    scale: "ÖLÇEK",
+                    pin: "GÖRSELDE İŞARETLE",
+                    code: "KOD ÇIKTISI",
+                  } as Record<QuestionKind, string>
+                )[current.kind || "choice"]
+              }{" "}
+              · {current.outcome || "ÖÇ-1"} · {current.bloom || "Uygulama"}
+            </span>
             <h3>{current.q}</h3>
             {current.image && (
               <div className="game-question-image">
@@ -2081,6 +2427,7 @@ function StudentStage({
   const [fiftyUsed, setFiftyUsed] = useState(false);
   const [hiddenOptions, setHiddenOptions] = useState<number[]>([]);
   const [spotlight, setSpotlight] = useState("");
+  const [openText, setOpenText] = useState("");
   const startedAtRef = useRef(Date.now());
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -2211,6 +2558,22 @@ function StudentStage({
             {timeLeft}
           </div>
           <h1>{question.q}</h1>
+          <span className="student-kind">
+            {
+              (
+                {
+                  choice: "Bir şık seç",
+                  multiple: "Birden fazla şık seç",
+                  truefalse: "Doğru mu, yanlış mı?",
+                  open: "Kısa yanıtını yaz",
+                  ranking: "Doğru sırayı seç",
+                  scale: "Ölçekte değerlendir",
+                  pin: "Görselde doğru noktayı bul",
+                  code: "Kodun çıktısını seç",
+                } as Record<QuestionKind, string>
+              )[question.kind || "choice"]
+            }
+          </span>
           {question.image && (
             <div className="student-question-image">
               <img src={question.image} alt="Soru görseli" />
@@ -2222,24 +2585,63 @@ function StudentStage({
             </button>
             <span>Doğru seri: 🔥 {streak}</span>
           </div>
-          <div className="student-answers">
-            {question.a.map((a, i) => (
+          {question.kind === "open" ? (
+            <div className="open-answer">
+              <input
+                value={openText}
+                onChange={(e) => setOpenText(e.target.value)}
+                placeholder="Yanıtını yaz…"
+              />
               <button
-                className={`game-option option-${i} ${answer === i ? "selected" : ""}`}
-                key={a}
-                onClick={() => choose(i)}
-                disabled={answer !== null}
-                style={
-                  hiddenOptions.includes(i)
-                    ? { visibility: "hidden" }
-                    : undefined
+                onClick={() =>
+                  choose(
+                    openText.trim().toLocaleLowerCase("tr-TR") ===
+                      question.a[question.correct]
+                        ?.trim()
+                        .toLocaleLowerCase("tr-TR")
+                      ? question.correct
+                      : -1,
+                  )
                 }
               >
-                <b>{optionMarks[i]}</b>
-                <span>{a}</span>
+                Yanıtı kilitle →
               </button>
-            ))}
-          </div>
+            </div>
+          ) : question.kind === "scale" ? (
+            <div className="scale-answer">
+              {[1, 2, 3, 4, 5].map((n, i) => (
+                <button
+                  key={n}
+                  onClick={() => choose(i)}
+                  disabled={answer !== null}
+                >
+                  <b>{n}</b>
+                  <span>{n === 1 ? "Hiç" : n === 5 ? "Tamamen" : ""}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div
+              className={`student-answers ${question.kind === "ranking" ? "ranking-answers" : ""}`}
+            >
+              {question.a.map((a, i) => (
+                <button
+                  className={`game-option option-${i} ${answer === i ? "selected" : ""}`}
+                  key={a}
+                  onClick={() => choose(i)}
+                  disabled={answer !== null}
+                  style={
+                    hiddenOptions.includes(i)
+                      ? { visibility: "hidden" }
+                      : undefined
+                  }
+                >
+                  <b>{optionMarks[i]}</b>
+                  <span>{a}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {answer === null ? (
             <p>Yanıtını seç — ne kadar hızlıysan o kadar çok XP!</p>
           ) : (

@@ -4,7 +4,11 @@ const supabaseUrl = "https://xsyaicybachxyfiauygy.supabase.co";
 const supabasePublishableKey = "sb_publishable_jR6KR3TWo3F3Bmj3CMQv7Q_LAvZ5Up6";
 
 export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
-  auth: { persistSession: false },
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
   realtime: { params: { eventsPerSecond: 10 } },
 });
 

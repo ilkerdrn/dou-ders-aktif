@@ -6173,3 +6173,38 @@ button {
     grid-template-columns: 36px minmax(0, 1fr) auto;
   }
 }
+
+/* V12 · üst menü giriş butonlarında okunabilirlik */
+.old-home .topbar .student-login-link {
+  display: inline-flex;
+  min-width: 138px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  background: var(--red);
+  color: #fff;
+  white-space: nowrap;
+}
+.old-home .topbar .student-login-link b {
+  display: inline;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1;
+}
+.old-home .topbar .student-login-link b:after {
+  content: none;
+}
+@media (max-width: 600px) {
+  .old-home .topbar .student-login-link {
+    min-width: 92px;
+    padding-inline: 10px;
+  }
+  .old-home .topbar .student-login-link b {
+    font-size: 0;
+  }
+  .old-home .topbar .student-login-link b:after {
+    content: "Öğrenci";
+    font-size: 10px;
+  }
+}

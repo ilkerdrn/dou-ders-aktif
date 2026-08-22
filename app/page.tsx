@@ -715,7 +715,8 @@ function Builder({
   );
 }
 type GamePhase = "lobby" | "question" | "leaderboard" | "final";
-type Player = { id: string; name: string; score: number };
+type Player = { id: string; name: string; score: number; streak?: number };
+const optionMarks = ["▲", "◆", "●", "■"];
 
 function Arena({
   type,
@@ -733,6 +734,7 @@ function Arena({
   const [round, setRound] = useState(0);
   const [players, setPlayers] = useState<Player[]>([]);
   const [answers, setAnswers] = useState(0);
+  const [answerStats, setAnswerStats] = useState([0, 0, 0, 0]);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const current = questions[round % questions.length];
 
@@ -755,10 +757,19 @@ function Arena({
     });
     channel.on("broadcast", { event: "answer" }, ({ payload }) => {
       setAnswers((v) => v + 1);
+      setAnswerStats((old) =>
+        old.map((n, i) => (i === payload.answer ? n + 1 : n)),
+      );
       if (payload.correct)
         setPlayers((old) =>
           old.map((p) =>
-            p.id === payload.id ? { ...p, score: p.score + payload.points } : p,
+            p.id === payload.id
+              ? {
+                  ...p,
+                  score: p.score + payload.points,
+                  streak: payload.streak,
+                }
+              : p,
           ),
         );
     });
@@ -775,6 +786,7 @@ function Arena({
     setPhase(next);
     setRound(nextRound);
     setAnswers(0);
+    setAnswerStats([0, 0, 0, 0]);
     channelRef.current?.send({
       type: "broadcast",
       event: "game-state",
@@ -784,6 +796,7 @@ function Arena({
         title,
         type,
         question: questions[nextRound % questions.length],
+        startedAt: Date.now(),
       },
     });
   };
@@ -838,10 +851,14 @@ function Arena({
               {current.a.map((a, i) => (
                 <button
                   key={a}
-                  className={i === current.correct ? "host-correct" : ""}
+                  className={`game-option option-${i} ${i === current.correct ? "host-correct" : ""}`}
                 >
-                  <b>{String.fromCharCode(65 + i)}</b>
-                  {a}
+                  <b>{optionMarks[i]}</b>
+                  <span>{a}</span>
+                  <small>
+                    {answers ? Math.round((answerStats[i] / answers) * 100) : 0}
+                    %
+                  </small>
                 </button>
               ))}
             </div>
@@ -856,12 +873,21 @@ function Arena({
         {phase === "leaderboard" && (
           <section className="live-board">
             <span className="overline">ARA SIRALAMA</span>
-            <h3>Tahta değişti!</h3>
+            <h3>🔥 Tahta değişti!</h3>
             {sorted.slice(0, 5).map((p, i) => (
-              <div key={p.id}>
+              <div key={p.id} className={i === 0 ? "leader-first" : ""}>
                 <b>{i + 1}</b>
-                <span>{p.name}</span>
-                <strong>{p.score} XP</strong>
+                <span>
+                  {p.name}
+                  <small>
+                    {p.streak && p.streak > 1
+                      ? ` 🔥 ${p.streak} seri`
+                      : i === 0
+                        ? " 👑 Lider"
+                        : ""}
+                  </small>
+                </span>
+                <strong>{p.score.toLocaleString("tr-TR")} XP</strong>
               </div>
             ))}
             <button
@@ -920,6 +946,9 @@ function StudentStage({
   const [question, setQuestion] = useState<Question>(quiz[0]);
   const [answer, setAnswer] = useState<number | null>(null);
   const [score, setScore] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
+  const startedAtRef = useRef(Date.now());
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
@@ -931,7 +960,9 @@ function StudentStage({
       setPhase(payload.phase);
       setRound(payload.round);
       if (payload.question) setQuestion(payload.question);
+      if (payload.startedAt) startedAtRef.current = payload.startedAt;
       setAnswer(null);
+      setFeedback(null);
     });
     channel.subscribe((s) => {
       if (s === "SUBSCRIBED") {
@@ -952,12 +983,27 @@ function StudentStage({
     if (answer !== null) return;
     setAnswer(i);
     const correct = i === question.correct;
-    const points = correct ? 100 : 0;
+    const speedBonus = Math.max(
+      0,
+      400 - Math.floor((Date.now() - startedAtRef.current) / 25),
+    );
+    const nextStreak = correct ? streak + 1 : 0;
+    const points = correct
+      ? 600 + speedBonus + Math.min(nextStreak * 75, 375)
+      : 0;
+    setStreak(nextStreak);
+    setFeedback(correct ? "correct" : "wrong");
     if (correct) setScore((v) => v + points);
     channelRef.current?.send({
       type: "broadcast",
       event: "answer",
-      payload: { id: idRef.current, answer: i, correct, points },
+      payload: {
+        id: idRef.current,
+        answer: i,
+        correct,
+        points,
+        streak: nextStreak,
+      },
     });
   };
 
@@ -982,9 +1028,10 @@ function StudentStage({
         </section>
       ) : phase === "question" ? (
         <section>
-          <div className="quiz-meta">
-            <span>◆ CANLI QUIZ</span>
-            <span>{round + 1}</span>
+          <div className="student-gamebar">
+            <span>🔥 {streak} SERİ</span>
+            <b>{score.toLocaleString("tr-TR")} XP</b>
+            <span>SORU {round + 1}</span>
           </div>
           <div className="timer">
             <i />
@@ -993,23 +1040,28 @@ function StudentStage({
           <div className="student-answers">
             {question.a.map((a, i) => (
               <button
-                className={answer === i ? "selected" : ""}
+                className={`game-option option-${i} ${answer === i ? "selected" : ""}`}
                 key={a}
                 onClick={() => choose(i)}
                 disabled={answer !== null}
               >
-                <b>{String.fromCharCode(65 + i)}</b>
-                {a}
+                <b>{optionMarks[i]}</b>
+                <span>{a}</span>
               </button>
             ))}
           </div>
-          <p>
-            {answer === null
-              ? "Yanıtını seç — hız puan kazandırır."
-              : answer === question.correct
-                ? "Harika! +100 XP 🎉"
-                : "Yanıtın kaydedildi. Sıradaki turda devam!"}
-          </p>
+          {answer === null ? (
+            <p>Yanıtını seç — ne kadar hızlıysan o kadar çok XP!</p>
+          ) : (
+            <div className={`answer-feedback ${feedback}`}>
+              <b>{feedback === "correct" ? "✓ MUHTEŞEM!" : "× ÇOK YAKINDI!"}</b>
+              <span>
+                {feedback === "correct"
+                  ? `Serin ${streak} oldu, hız bonusu kazandın!`
+                  : "Doğru cevabı ekranda birlikte görelim."}
+              </span>
+            </div>
+          )}
         </section>
       ) : (
         <section className="student-wait">

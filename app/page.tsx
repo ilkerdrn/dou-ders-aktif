@@ -1,7 +1,24 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { roomTopic, supabase } from "@/lib/supabase";
-type View = "live" | "activities" | "reports";
+type View =
+  | "live"
+  | "activities"
+  | "courses"
+  | "assignments"
+  | "qna"
+  | "radar"
+  | "reports"
+  | "settings";
+type QuestionKind =
+  | "choice"
+  | "multiple"
+  | "truefalse"
+  | "open"
+  | "ranking"
+  | "scale"
+  | "pin"
+  | "code";
 type GameType =
   | "Quiz"
   | "Anket"
@@ -14,6 +31,10 @@ type Question = {
   correct: number;
   seconds?: number;
   image?: string;
+  kind?: QuestionKind;
+  outcome?: string;
+  bloom?: string;
+  points?: number;
 };
 type Activity = {
   id: number;
@@ -137,7 +158,13 @@ export default function Home() {
     [studentName, setStudentName] = useState(""),
     [toast, setToast] = useState(""),
     [notificationsOpen, setNotificationsOpen] = useState(false),
-    [unread, setUnread] = useState(3);
+    [unread, setUnread] = useState(3),
+    [accessibility, setAccessibility] = useState({
+      contrast: false,
+      large: false,
+      motion: false,
+      labels: true,
+    });
   useEffect(() => {
     try {
       const saved = localStorage.getItem("dou-activities");
@@ -149,6 +176,14 @@ export default function Home() {
       localStorage.setItem("dou-activities", JSON.stringify(activities));
     } catch {}
   }, [activities]);
+  useEffect(() => {
+    document.body.classList.toggle("high-contrast", accessibility.contrast);
+    document.body.classList.toggle("large-ui", accessibility.large);
+    document.body.classList.toggle("reduce-motion", accessibility.motion);
+    try {
+      localStorage.setItem("dou-accessibility", JSON.stringify(accessibility));
+    } catch {}
+  }, [accessibility]);
   const notify = (m: string) => {
     setToast(m);
     setTimeout(() => setToast(""), 2200);
@@ -185,11 +220,20 @@ export default function Home() {
           <div>
             <span className="overline">DOĞUŞ ÜNİVERSİTESİ · DERS AKTİF</span>
             <h1>
-              {view === "live"
-                ? "Sınıf hazır. Oyunu başlatalım."
-                : view === "activities"
-                  ? "Etkinlik stüdyosu"
-                  : "Ders raporları"}
+              {
+                (
+                  {
+                    live: "Sınıf hazır. Oyunu başlatalım.",
+                    activities: "Etkinlik stüdyosu",
+                    courses: "Dersler ve sınıflar",
+                    assignments: "Ödevler ve bağımsız çalışmalar",
+                    qna: "Canlı soru & cevap",
+                    radar: "DOU Öğrenme Radarı",
+                    reports: "Ders raporları",
+                    settings: "Deneyim ayarları",
+                  } as Record<View, string>
+                )[view]
+              }
             </h1>
           </div>
           <div className="head-actions">
@@ -304,6 +348,15 @@ export default function Home() {
           />
         )}
         {view === "reports" && <Reports />}
+        {view === "courses" && <Courses notify={notify} />}
+        {view === "assignments" && (
+          <Assignments activities={activities} notify={notify} />
+        )}
+        {view === "qna" && <LiveQA />}
+        {view === "radar" && <LearningRadar />}
+        {view === "settings" && (
+          <Settings value={accessibility} setValue={setAccessibility} />
+        )}
       </section>
       {builder && (
         <Builder
@@ -346,6 +399,7 @@ function Sidebar({
     <aside className="sidebar">
       <Logo dark />
       <nav>
+        <small className="nav-label">ÖĞRETİM</small>
         <button
           className={view === "live" ? "active" : ""}
           onClick={() => setView("live")}
@@ -353,10 +407,42 @@ function Sidebar({
           <span>●</span>Canlı Ders
         </button>
         <button
+          className={view === "courses" ? "active" : ""}
+          onClick={() => setView("courses")}
+        >
+          <span>▣</span>Derslerim
+        </button>
+        <button
+          className={view === "assignments" ? "active" : ""}
+          onClick={() => setView("assignments")}
+        >
+          <span>✓</span>Ödevler
+        </button>
+        <small className="nav-label">CANLI ETKİLEŞİM</small>
+        <button
+          className={view === "qna" ? "active" : ""}
+          onClick={() => setView("qna")}
+        >
+          <span>?</span>Soru & Cevap
+        </button>
+        <small className="nav-label">İÇGÖRÜ</small>
+        <button
+          className={view === "radar" ? "active" : ""}
+          onClick={() => setView("radar")}
+        >
+          <span>◎</span>Öğrenme Radarı
+        </button>
+        <button
           className={view === "activities" ? "active" : ""}
           onClick={() => setView("activities")}
         >
           <span>▦</span>Etkinliklerim
+        </button>
+        <button
+          className={view === "settings" ? "active" : ""}
+          onClick={() => setView("settings")}
+        >
+          <span>⚙</span>Ayarlar
         </button>
         <button
           className={view === "reports" ? "active" : ""}
@@ -702,6 +788,542 @@ function Reports() {
     </>
   );
 }
+function Courses({ notify }: { notify: (s: string) => void }) {
+  const [query, setQuery] = useState("");
+  const [courses, setCourses] = useState([
+    {
+      code: "BMT203",
+      name: "Python Programlama",
+      students: 42,
+      progress: 78,
+      color: "#d70926",
+    },
+    {
+      code: "BMT311",
+      name: "Sunucu İşletim Sistemleri",
+      students: 36,
+      progress: 64,
+      color: "#6c4df6",
+    },
+    {
+      code: "BMT218",
+      name: "Görsel Programlama",
+      students: 38,
+      progress: 86,
+      color: "#159a80",
+    },
+  ]);
+  const add = () => {
+    setCourses((v) => [
+      ...v,
+      {
+        code: `DOU${200 + v.length}`,
+        name: "Yeni Ders",
+        students: 0,
+        progress: 0,
+        color: "#f5a524",
+      },
+    ]);
+    notify("Yeni ders alanı oluşturuldu");
+  };
+  return (
+    <>
+      <div className="module-hero">
+        <div>
+          <span className="overline">AKADEMİK DÖNEM · 2026 GÜZ</span>
+          <h2>Tüm sınıflar, tek akış.</h2>
+          <p>Etkinlik, ödev ve öğrenme çıktısını ders bazında yönetin.</p>
+        </div>
+        <button className="primary" onClick={add}>
+          ＋ Ders oluştur
+        </button>
+      </div>
+      <div className="module-toolbar">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Ders adı veya kodu ara…"
+        />
+        <span>{courses.length} aktif ders · 116 öğrenci</span>
+      </div>
+      <div className="course-grid">
+        {courses
+          .filter((c) =>
+            `${c.code} ${c.name}`.toLowerCase().includes(query.toLowerCase()),
+          )
+          .map((c, i) => (
+            <article className="course-card panel" key={c.code}>
+              <div className="course-cover" style={{ background: c.color }}>
+                <small>{c.code}</small>
+                <b>0{i + 1}</b>
+              </div>
+              <div>
+                <h3>{c.name}</h3>
+                <p>
+                  {c.students} öğrenci · {6 + i * 2} etkinlik
+                </p>
+                <label>
+                  <span>Ders ilerlemesi</span>
+                  <b>%{c.progress}</b>
+                </label>
+                <i>
+                  <em
+                    style={{ width: `${c.progress}%`, background: c.color }}
+                  />
+                </i>
+                <button
+                  onClick={() => notify(`${c.name} çalışma alanı açıldı`)}
+                >
+                  Dersi aç →
+                </button>
+              </div>
+            </article>
+          ))}
+      </div>
+    </>
+  );
+}
+function Assignments({
+  activities,
+  notify,
+}: {
+  activities: Activity[];
+  notify: (s: string) => void;
+}) {
+  const [items, setItems] = useState([
+    {
+      title: "Python Döngüleri Tekrarı",
+      course: "BMT203",
+      due: "25 Ağu",
+      done: 34,
+      total: 42,
+      status: "Yayında",
+    },
+    {
+      title: "Linux Yetkilendirme",
+      course: "BMT311",
+      due: "29 Ağu",
+      done: 21,
+      total: 36,
+      status: "Yayında",
+    },
+    {
+      title: "Arayüz Tasarım İlkeleri",
+      course: "BMT218",
+      due: "Taslak",
+      done: 0,
+      total: 38,
+      status: "Taslak",
+    },
+  ]);
+  const create = () => {
+    const a = activities[0];
+    setItems((v) => [
+      {
+        title: a?.title || "Yeni çalışma",
+        course: "BMT203",
+        due: "7 gün",
+        done: 0,
+        total: 42,
+        status: "Taslak",
+      },
+      ...v,
+    ]);
+    notify("Etkinlik ödeve dönüştürüldü");
+  };
+  return (
+    <>
+      <div className="module-hero">
+        <div>
+          <span className="overline">KENDİ HIZINDA ÖĞRENME</span>
+          <h2>Ders bittiğinde oyun devam eder.</h2>
+          <p>
+            Etkinlikleri ödeve çevirin, son tarih ve tamamlama durumunu izleyin.
+          </p>
+        </div>
+        <button className="primary" onClick={create}>
+          ＋ Etkinlikten ödev
+        </button>
+      </div>
+      <div className="assignment-list panel">
+        {items.map((x, i) => (
+          <article key={i}>
+            <span className={`status ${x.status === "Yayında" ? "live" : ""}`}>
+              {x.status}
+            </span>
+            <div>
+              <small>
+                {x.course} · Son: {x.due}
+              </small>
+              <h3>{x.title}</h3>
+            </div>
+            <div className="assignment-progress">
+              <b>
+                {x.done}/{x.total}
+              </b>
+              <small>tamamladı</small>
+              <i>
+                <em
+                  style={{
+                    width: `${x.total ? (x.done / x.total) * 100 : 0}%`,
+                  }}
+                />
+              </i>
+            </div>
+            <button onClick={() => notify("Ödev ayrıntıları açıldı")}>
+              Yönet →
+            </button>
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
+type QAItem = {
+  id: number;
+  text: string;
+  votes: number;
+  answered: boolean;
+  pinned: boolean;
+};
+function LiveQA() {
+  const [text, setText] = useState("");
+  const [items, setItems] = useState<QAItem[]>([
+    {
+      id: 1,
+      text: "Final projesinde takım büyüklüğü kaç kişi olacak?",
+      votes: 18,
+      answered: false,
+      pinned: true,
+    },
+    {
+      id: 2,
+      text: "Örnek kodları ders sonrasında paylaşacak mısınız?",
+      votes: 12,
+      answered: false,
+      pinned: false,
+    },
+    {
+      id: 3,
+      text: "Bu konu vizede hangi ağırlıkta?",
+      votes: 7,
+      answered: true,
+      pinned: false,
+    },
+  ]);
+  const add = () => {
+    if (!text.trim()) return;
+    setItems((v) => [
+      {
+        id: Date.now(),
+        text: text.trim(),
+        votes: 0,
+        answered: false,
+        pinned: false,
+      },
+      ...v,
+    ]);
+    setText("");
+  };
+  return (
+    <div className="qna-layout">
+      <section>
+        <div className="module-hero compact">
+          <div>
+            <span className="overline">ANONİM · MODERASYONLU</span>
+            <h2>Her ses sınıfa ulaşsın.</h2>
+            <p>Öğrenciler soru sorar, oylama en önemli konuyu üste taşır.</p>
+          </div>
+          <span className="live-pill">● CANLI</span>
+        </div>
+        <div className="ask-box">
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && add()}
+            placeholder="Demo öğrenci sorusu ekle…"
+          />
+          <button onClick={add}>Gönder</button>
+        </div>
+        <div className="qa-list">
+          {[...items]
+            .sort(
+              (a, b) =>
+                Number(b.pinned) - Number(a.pinned) || b.votes - a.votes,
+            )
+            .map((q) => (
+              <article className={q.pinned ? "pinned" : ""} key={q.id}>
+                <button
+                  className="vote"
+                  onClick={() =>
+                    setItems((v) =>
+                      v.map((x) =>
+                        x.id === q.id ? { ...x, votes: x.votes + 1 } : x,
+                      ),
+                    )
+                  }
+                >
+                  ▲<b>{q.votes}</b>
+                </button>
+                <div>
+                  {q.pinned && <small>📌 SABİTLENDİ</small>}
+                  <p className={q.answered ? "answered" : ""}>{q.text}</p>
+                  <span>Anonim öğrenci · şimdi</span>
+                </div>
+                <div className="qa-actions">
+                  <button
+                    onClick={() =>
+                      setItems((v) =>
+                        v.map((x) =>
+                          x.id === q.id ? { ...x, pinned: !x.pinned } : x,
+                        ),
+                      )
+                    }
+                  >
+                    📌
+                  </button>
+                  <button
+                    onClick={() =>
+                      setItems((v) =>
+                        v.map((x) =>
+                          x.id === q.id ? { ...x, answered: !x.answered } : x,
+                        ),
+                      )
+                    }
+                  >
+                    ✓
+                  </button>
+                  <button
+                    onClick={() =>
+                      setItems((v) => v.filter((x) => x.id !== q.id))
+                    }
+                  >
+                    ×
+                  </button>
+                </div>
+              </article>
+            ))}
+        </div>
+      </section>
+      <aside className="qna-side panel">
+        <span>OTURUM ÖZETİ</span>
+        <strong>{items.length}</strong>
+        <p>toplam soru</p>
+        <b>{items.reduce((s, x) => s + x.votes, 0)} oy</b>
+        <hr />
+        <h3>Sınıf nabzı</h3>
+        <div className="pulse-row">
+          <span>👍 24</span>
+          <span>🤔 8</span>
+          <span>🐢 3</span>
+        </div>
+        <button
+          onClick={() =>
+            setItems((v) => v.map((x) => ({ ...x, answered: true })))
+          }
+        >
+          Tümünü yanıtlandı yap
+        </button>
+      </aside>
+    </div>
+  );
+}
+function LearningRadar() {
+  const outcomes = [
+    {
+      id: "ÖÇ-1",
+      name: "Temel kavramları açıklar",
+      value: 88,
+      color: "#159a80",
+    },
+    { id: "ÖÇ-2", name: "Algoritma tasarlar", value: 71, color: "#6c4df6" },
+    { id: "ÖÇ-3", name: "Çözümü uygular", value: 62, color: "#f5a524" },
+    {
+      id: "PÇ-4",
+      name: "Etik ve güvenliği değerlendirir",
+      value: 46,
+      color: "#d70926",
+    },
+  ];
+  const download = () => {
+    const csv =
+      "Çıktı,Başarı\n" + outcomes.map((x) => `${x.id},%${x.value}`).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(
+      new Blob(["\ufeff" + csv], { type: "text/csv" }),
+    );
+    a.download = "dou-akreditasyon-kaniti.csv";
+    a.click();
+  };
+  return (
+    <>
+      <div className="radar-hero">
+        <div>
+          <span className="overline">DOU'YA ÖZEL KARAR DESTEK</span>
+          <h2>Öğrenme gerçekleşiyor mu?</h2>
+          <p>
+            Canlı cevapları ders çıktısı, program çıktısı ve Bloom düzeyinde
+            anlamlı kanıta dönüştürür.
+          </p>
+        </div>
+        <button className="outline" onClick={download}>
+          Akreditasyon kanıtını indir ↓
+        </button>
+      </div>
+      <div className="radar-grid">
+        <article className="panel outcome-card">
+          <div className="panel-title">
+            <div>
+              <small>ÖÇ / PÇ BAŞARI HARİTASI</small>
+              <h3>Çıktı kapsama radarı</h3>
+            </div>
+            <b>Genel %67</b>
+          </div>
+          {outcomes.map((x) => (
+            <div className="outcome" key={x.id}>
+              <b>{x.id}</b>
+              <span>
+                {x.name}
+                <i>
+                  <em style={{ width: `${x.value}%`, background: x.color }} />
+                </i>
+              </span>
+              <strong style={{ color: x.color }}>%{x.value}</strong>
+            </div>
+          ))}
+        </article>
+        <article className="panel bloom-card">
+          <small>BLOOM DERİNLİĞİ</small>
+          <h3>Sorular yalnızca ezber ölçmüyor.</h3>
+          {[
+            ["Hatırlama", 92],
+            ["Anlama", 84],
+            ["Uygulama", 68],
+            ["Analiz", 55],
+            ["Değerlendirme", 42],
+            ["Yaratma", 28],
+          ].map(([n, v], i) => (
+            <div key={n as string}>
+              <span>{n}</span>
+              <i style={{ height: `${Number(v) / 1.2}px` }} />
+              <b>%{v}</b>
+            </div>
+          ))}
+        </article>
+        <article className="panel misconception">
+          <small>ERKEN UYARI</small>
+          <h3>3 kavram yanılgısı yakalandı</h3>
+          <div>
+            <b>01</b>
+            <span>
+              <strong>Döngü koşulu ≠ sayaç</strong>
+              <small>14 öğrenci aynı çeldiriciyi seçti.</small>
+            </span>
+          </div>
+          <div>
+            <b>02</b>
+            <span>
+              <strong>Yetki ve sahiplik karışıyor</strong>
+              <small>ÖÇ-3 başarısı son iki oturumda düştü.</small>
+            </span>
+          </div>
+          <button>5 dakikalık iyileştirme etkinliği oluştur →</button>
+        </article>
+        <article className="panel next-action">
+          <span>✦ PEDAGOJİK ÖNERİ</span>
+          <h3>
+            Bir sonraki derse “Tahmin et → Çalıştır → Açıkla” takım turuyla
+            başlayın.
+          </h3>
+          <p>
+            Radara göre uygulama becerisi güçlü, değerlendirme düzeyi zayıf. Kod
+            çıktısı ve akran açıklaması bu boşluğu hedefler.
+          </p>
+          <button>Öneriyi etkinliğe çevir</button>
+        </article>
+      </div>
+    </>
+  );
+}
+function Settings({
+  value,
+  setValue,
+}: {
+  value: {
+    contrast: boolean;
+    large: boolean;
+    motion: boolean;
+    labels: boolean;
+  };
+  setValue: (v: {
+    contrast: boolean;
+    large: boolean;
+    motion: boolean;
+    labels: boolean;
+  }) => void;
+}) {
+  const options: Array<[keyof typeof value, string, string]> = [
+    [
+      "contrast",
+      "Yüksek kontrast",
+      "Metin ve kontrollerin ayrımını güçlendirir",
+    ],
+    [
+      "large",
+      "Büyük arayüz",
+      "Projeksiyon ve düşük görüş için yazıları büyütür",
+    ],
+    ["motion", "Hareketi azalt", "Animasyon ve geçişleri sınırlar"],
+    [
+      "labels",
+      "Renk + şekil etiketleri",
+      "Cevapları yalnızca renkle ayırt etmez",
+    ],
+  ];
+  return (
+    <div className="settings-grid">
+      <section className="panel">
+        <span className="overline">ERİŞİLEBİLİRLİK</span>
+        <h2>Her öğrenci oyunda.</h2>
+        <p>
+          Bu tercihler bu cihazda saklanır ve tüm canlı oturumlara uygulanır.
+        </p>
+        {options.map(([key, title, desc]) => (
+          <label className="setting-row" key={key}>
+            <span>
+              <b>{title}</b>
+              <small>{desc}</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={value[key]}
+              onChange={(e) => setValue({ ...value, [key]: e.target.checked })}
+            />
+            <i />
+          </label>
+        ))}
+      </section>
+      <aside className="panel integration-card">
+        <span className="overline">KURUMSAL HAZIRLIK</span>
+        <h3>DOU dijital ekosistemi</h3>
+        {[
+          "ÖBS / LMS ders eşleme",
+          "Kurumsal SSO",
+          "KVKK uyumlu anonim katılım",
+          "CSV ve akreditasyon dışa aktarımı",
+        ].map((x, i) => (
+          <div key={x}>
+            <b>{i < 2 ? "Hazır" : "Aktif"}</b>
+            <span>{x}</span>
+          </div>
+        ))}
+        <small>
+          ÖBS ve SSO bağlantısı kurum erişim bilgileriyle etkinleştirilir.
+        </small>
+      </aside>
+    </div>
+  );
+}
 function Builder({
   close,
   save,
@@ -716,6 +1338,10 @@ function Builder({
     a: ["", "", "", ""],
     correct: 0,
     seconds: 20,
+    kind: "choice",
+    outcome: "ÖÇ-1",
+    bloom: "Uygulama",
+    points: 1000,
   });
   const [type, setType] = useState<GameType>(initial?.type || "Quiz");
   const [title, setTitle] = useState(initial?.title || "");
@@ -981,6 +1607,61 @@ function Builder({
               <button onClick={makeTrueFalse}>◐ Doğru/Yanlış</button>
               <button onClick={remove}>⌫ Sil</button>
             </div>
+            <div className="question-meta-tools">
+              <label>
+                Soru tipi
+                <select
+                  value={current.kind || "choice"}
+                  onChange={(e) =>
+                    update({ kind: e.target.value as QuestionKind })
+                  }
+                >
+                  {[
+                    ["choice", "Çoktan seçmeli"],
+                    ["multiple", "Çoklu doğru"],
+                    ["truefalse", "Doğru / Yanlış"],
+                    ["open", "Açık uçlu"],
+                    ["ranking", "Sıralama"],
+                    ["scale", "Ölçek"],
+                    ["pin", "Görselde işaretle"],
+                    ["code", "Kod çıktısı"],
+                  ].map(([v, n]) => (
+                    <option key={v} value={v}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Öğrenme çıktısı
+                <select
+                  value={current.outcome || "ÖÇ-1"}
+                  onChange={(e) => update({ outcome: e.target.value })}
+                >
+                  {["ÖÇ-1", "ÖÇ-2", "ÖÇ-3", "PÇ-4"].map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Bloom düzeyi
+                <select
+                  value={current.bloom || "Uygulama"}
+                  onChange={(e) => update({ bloom: e.target.value })}
+                >
+                  {[
+                    "Hatırlama",
+                    "Anlama",
+                    "Uygulama",
+                    "Analiz",
+                    "Değerlendirme",
+                    "Yaratma",
+                  ].map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <textarea
               className="question-title-input"
               value={current.q}
@@ -1092,6 +1773,7 @@ function Arena({
   const [answerStats, setAnswerStats] = useState([0, 0, 0, 0]);
   const [timeLeft, setTimeLeft] = useState(20);
   const [paused, setPaused] = useState(false);
+  const [projection, setProjection] = useState(false);
   const [pulse, setPulse] = useState({
     understood: 0,
     repeat: 0,
@@ -1199,7 +1881,9 @@ function Arena({
 
   return (
     <div className="modal arena-modal">
-      <div className="game-arena realtime-arena">
+      <div
+        className={`game-arena realtime-arena ${projection ? "projection-mode" : ""}`}
+      >
         <header>
           <div>
             <span className="live-pill">● GERÇEK ZAMANLI</span>
@@ -1209,6 +1893,9 @@ function Arena({
             <b>
               {code.slice(0, 3)} {code.slice(3)}
             </b>
+            <button onClick={() => setProjection((v) => !v)}>
+              {projection ? "Kontrole dön" : "▣ Projeksiyon"}
+            </button>
             <button onClick={close}>Bitir ×</button>
           </div>
         </header>

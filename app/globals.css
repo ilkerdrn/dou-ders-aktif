@@ -1699,6 +1699,151 @@ button {
   transform: rotate(1deg);
 }
 
+/* Akademisyen kontrol merkezi, jokerler ve ders nabzı */
+.host-controlbar {
+  display: flex !important;
+  grid-template-columns: none !important;
+  gap: 8px !important;
+  align-items: center;
+  background: #161616;
+  margin: -35px -35px 22px;
+  padding: 10px 14px;
+}
+.host-controlbar button {
+  border: 1px solid #ffffff22 !important;
+  background: #ffffff12 !important;
+  color: #fff !important;
+  box-shadow: none !important;
+  padding: 8px 11px !important;
+  border-radius: 8px !important;
+  font-size: 9px !important;
+}
+.host-controlbar span {
+  margin-left: auto;
+  color: #aaa;
+  font-size: 9px;
+}
+.pulse-monitor {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 18px -35px -35px;
+  padding: 11px;
+  background: #eee;
+}
+.pulse-monitor > b {
+  font-size: 9px;
+  color: var(--red);
+}
+.pulse-monitor > span {
+  font-size: 9px;
+  background: #fff;
+  border-radius: 15px;
+  padding: 6px 9px;
+}
+.pulse-monitor strong {
+  color: var(--red);
+}
+.player-chips span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.player-chips span button {
+  border: 0;
+  background: #eee;
+  color: #999;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+.powerups {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 14px;
+}
+.powerups button {
+  border: 0;
+  background: linear-gradient(135deg, #6c4df6, #4930bd);
+  color: #fff;
+  border-radius: 18px;
+  padding: 8px 12px;
+  font-size: 10px;
+  font-weight: 800;
+  box-shadow: 0 4px 0 #2d1b86;
+}
+.powerups button:disabled {
+  opacity: 0.45;
+}
+.powerups span {
+  font-size: 10px;
+  font-weight: 800;
+  color: #d70926;
+}
+.student-pulse {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 22px -35px -35px;
+  padding: 12px;
+  background: #f0efec;
+  border-radius: 0 0 25px 25px;
+}
+.student-pulse small {
+  width: 100%;
+  text-align: center;
+  color: #777;
+}
+.student-pulse button {
+  border: 1px solid #ddd;
+  background: #fff;
+  border-radius: 15px;
+  padding: 7px 10px;
+  font-size: 9px;
+  font-weight: 700;
+}
+.spotlight-toast {
+  position: fixed;
+  z-index: 10;
+  top: 95px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ffcc42;
+  color: #171717;
+  border-radius: 30px;
+  padding: 12px 22px;
+  font-weight: 900;
+  box-shadow: 0 8px 0 #b58500;
+  animation: feedback-pop 0.35s cubic-bezier(0.2, 1.8, 0.5, 1);
+}
+@media (max-width: 600px) {
+  .host-controlbar {
+    margin: -35px -35px 18px;
+    overflow: auto;
+  }
+  .host-controlbar span {
+    display: none;
+  }
+  .pulse-monitor {
+    overflow: auto;
+    justify-content: flex-start;
+  }
+  .student-pulse {
+    margin-left: -35px;
+    margin-right: -35px;
+  }
+  .powerups {
+    gap: 8px;
+  }
+  .powerups span {
+    font-size: 9px;
+  }
+}
+
 /* Akıllı soru bankası */
 .builder-settings {
   grid-template-columns: 1fr 220px 190px;

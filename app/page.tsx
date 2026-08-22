@@ -938,6 +938,13 @@ function Arena({
   const [answers, setAnswers] = useState(0);
   const [answerStats, setAnswerStats] = useState([0, 0, 0, 0]);
   const [timeLeft, setTimeLeft] = useState(20);
+  const [paused, setPaused] = useState(false);
+  const [pulse, setPulse] = useState({
+    understood: 0,
+    repeat: 0,
+    example: 0,
+    question: 0,
+  });
   const [gameQuestions] = useState(() =>
     shuffle ? [...questions].sort(() => Math.random() - 0.5) : questions,
   );
@@ -979,6 +986,12 @@ function Arena({
           ),
         );
     });
+    channel.on("broadcast", { event: "pulse" }, ({ payload }) => {
+      setPulse((old) => ({
+        ...old,
+        [payload.kind]: (old[payload.kind as keyof typeof old] || 0) + 1,
+      }));
+    });
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED")
         channel.track({ id: "host", name: "Akademisyen", score: 0 });
@@ -1008,7 +1021,7 @@ function Arena({
     });
   };
   useEffect(() => {
-    if (phase !== "question") return;
+    if (phase !== "question" || paused) return;
     const timer = window.setInterval(() => {
       setTimeLeft((value) => {
         if (value <= 1) {
@@ -1020,7 +1033,15 @@ function Arena({
       });
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [phase, round]);
+  }, [phase, round, paused]);
+  const removePlayer = (id: string) => {
+    setPlayers((all) => all.filter((p) => p.id !== id));
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "moderation",
+      payload: { action: "remove", id },
+    });
+  };
   const sorted = [...players].sort((a, b) => b.score - a.score);
 
   return (
@@ -1051,7 +1072,15 @@ function Arena({
             </h3>
             <div className="player-chips">
               {players.map((p) => (
-                <span key={p.id}>● {p.name}</span>
+                <span key={p.id}>
+                  ● {p.name}
+                  <button
+                    onClick={() => removePlayer(p.id)}
+                    title="Katılımcıyı çıkar"
+                  >
+                    ×
+                  </button>
+                </span>
               ))}
             </div>
             <button className="primary" onClick={() => broadcast("question")}>
@@ -1061,6 +1090,26 @@ function Arena({
         )}
         {phase === "question" && (
           <section className="quiz-arena">
+            <div className="host-controlbar">
+              <button onClick={() => setPaused((v) => !v)}>
+                {paused ? "▶ Devam et" : "Ⅱ Duraklat"}
+              </button>
+              <button onClick={() => setTimeLeft((v) => v + 10)}>
+                ＋10 sn
+              </button>
+              <button
+                onClick={() =>
+                  channelRef.current?.send({
+                    type: "broadcast",
+                    event: "spotlight",
+                    payload: { message: "Bu soruya dikkat!" },
+                  })
+                }
+              >
+                ✦ Dikkat çek
+              </button>
+              <span>{paused ? "Oyun duraklatıldı" : "Oyun devam ediyor"}</span>
+            </div>
             <div className="quiz-meta">
               <span>
                 SORU {round + 1} / {gameQuestions.length}
@@ -1088,6 +1137,21 @@ function Arena({
                 Cevapları kapat →
               </button>
             </footer>
+            <div className="pulse-monitor">
+              <b>DERS NABZI</b>
+              <span>
+                ✓ Anladım <strong>{pulse.understood}</strong>
+              </span>
+              <span>
+                ↻ Tekrar <strong>{pulse.repeat}</strong>
+              </span>
+              <span>
+                ◈ Örnek <strong>{pulse.example}</strong>
+              </span>
+              <span>
+                ? Sorum var <strong>{pulse.question}</strong>
+              </span>
+            </div>
           </section>
         )}
         {phase === "leaderboard" && (
@@ -1169,6 +1233,9 @@ function StudentStage({
   const [streak, setStreak] = useState(0);
   const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
   const [timeLeft, setTimeLeft] = useState(20);
+  const [fiftyUsed, setFiftyUsed] = useState(false);
+  const [hiddenOptions, setHiddenOptions] = useState<number[]>([]);
+  const [spotlight, setSpotlight] = useState("");
   const startedAtRef = useRef(Date.now());
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -1185,6 +1252,14 @@ function StudentStage({
       if (payload.startedAt) startedAtRef.current = payload.startedAt;
       setAnswer(null);
       setFeedback(null);
+      setHiddenOptions([]);
+    });
+    channel.on("broadcast", { event: "moderation" }, ({ payload }) => {
+      if (payload.action === "remove" && payload.id === idRef.current) onExit();
+    });
+    channel.on("broadcast", { event: "spotlight" }, ({ payload }) => {
+      setSpotlight(payload.message);
+      window.setTimeout(() => setSpotlight(""), 2200);
     });
     channel.subscribe((s) => {
       if (s === "SUBSCRIBED") {
@@ -1237,6 +1312,21 @@ function StudentStage({
       },
     });
   };
+  const useFifty = () => {
+    if (fiftyUsed || answer !== null) return;
+    const wrong = question.a
+      .map((_, i) => i)
+      .filter((i) => i !== question.correct)
+      .slice(0, 2);
+    setHiddenOptions(wrong);
+    setFiftyUsed(true);
+  };
+  const sendPulse = (kind: "understood" | "repeat" | "example" | "question") =>
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "pulse",
+      payload: { kind, id: idRef.current },
+    });
 
   return (
     <main className="student-stage">
@@ -1259,6 +1349,7 @@ function StudentStage({
         </section>
       ) : phase === "question" ? (
         <section>
+          {spotlight && <div className="spotlight-toast">✦ {spotlight}</div>}
           <div className="student-gamebar">
             <span>🔥 {streak} SERİ</span>
             <b>{score.toLocaleString("tr-TR")} XP</b>
@@ -1275,6 +1366,12 @@ function StudentStage({
             {timeLeft}
           </div>
           <h1>{question.q}</h1>
+          <div className="powerups">
+            <button onClick={useFifty} disabled={fiftyUsed}>
+              ◐ 50:50 {fiftyUsed ? "kullanıldı" : "jokeri"}
+            </button>
+            <span>Doğru seri: 🔥 {streak}</span>
+          </div>
           <div className="student-answers">
             {question.a.map((a, i) => (
               <button
@@ -1282,6 +1379,11 @@ function StudentStage({
                 key={a}
                 onClick={() => choose(i)}
                 disabled={answer !== null}
+                style={
+                  hiddenOptions.includes(i)
+                    ? { visibility: "hidden" }
+                    : undefined
+                }
               >
                 <b>{optionMarks[i]}</b>
                 <span>{a}</span>
@@ -1300,6 +1402,13 @@ function StudentStage({
               </span>
             </div>
           )}
+          <div className="student-pulse">
+            <small>Dersin nasıl gidiyor?</small>
+            <button onClick={() => sendPulse("understood")}>✓ Anladım</button>
+            <button onClick={() => sendPulse("repeat")}>↻ Tekrar</button>
+            <button onClick={() => sendPulse("example")}>◈ Örnek</button>
+            <button onClick={() => sendPulse("question")}>? Sorum var</button>
+          </div>
         </section>
       ) : (
         <section className="student-wait">

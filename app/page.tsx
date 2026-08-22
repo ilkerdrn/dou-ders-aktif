@@ -14,6 +14,14 @@ type View =
   | "admin"
   | "integrations"
   | "settings";
+type AppMode = "landing" | "teacher" | "student" | "student-dashboard";
+type AuthIntent = "student" | "instructor";
+type Identity = {
+  id: string;
+  email: string;
+  fullName: string;
+  role: AuthIntent;
+};
 type QuestionKind =
   | "choice"
   | "multiple"
@@ -223,9 +231,7 @@ const quiz = [
   },
 ];
 export default function Home() {
-  const [mode, setMode] = useState<"landing" | "teacher" | "student">(
-      "landing",
-    ),
+  const [mode, setMode] = useState<AppMode>("landing"),
     [view, setView] = useState<View>("live"),
     [activities, setActivities] = useState(starters),
     [builder, setBuilder] = useState(false),
@@ -235,6 +241,11 @@ export default function Home() {
     [code, setCode] = useState(""),
     [studentName, setStudentName] = useState(""),
     [toast, setToast] = useState(""),
+    [identity, setIdentity] = useState<Identity | null>(null),
+    [authLoading, setAuthLoading] = useState(true),
+    [authOpen, setAuthOpen] = useState(false),
+    [authIntent, setAuthIntent] = useState<AuthIntent>("student"),
+    [authError, setAuthError] = useState(""),
     [notificationsOpen, setNotificationsOpen] = useState(false),
     [unread, setUnread] = useState(3),
     [accessibility, setAccessibility] = useState<AccessibilityPrefs>({
@@ -247,6 +258,88 @@ export default function Home() {
       focus: false,
       hints: false,
     });
+  useEffect(() => {
+    const resolveIdentity = async (
+      user: {
+        id: string;
+        email?: string;
+        user_metadata?: Record<string, unknown>;
+      } | null,
+    ) => {
+      if (!user) {
+        setIdentity(null);
+        setAuthLoading(false);
+        return;
+      }
+      const email = (user.email || "").trim().toLocaleLowerCase("tr-TR");
+      if (!email.endsWith("@dogus.edu.tr")) {
+        await supabase.auth.signOut();
+        setAuthError(
+          "Yalnızca @dogus.edu.tr uzantılı kurumsal hesaplar kabul edilir.",
+        );
+        setAuthOpen(true);
+        setAuthLoading(false);
+        return;
+      }
+      const { data: profile, error } = await supabase
+        .from("dou_user_profiles")
+        .select("role,full_name")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (error || !profile) {
+        setAuthError("Kurumsal profil hazırlanamadı. Lütfen tekrar deneyin.");
+        setAuthOpen(true);
+        setAuthLoading(false);
+        return;
+      }
+      const fullName =
+        profile.full_name ||
+        String(
+          user.user_metadata?.full_name || user.user_metadata?.name || "",
+        ) ||
+        email.split("@")[0].replace(/[._]/g, " ");
+      const nextIdentity: Identity = {
+        id: user.id,
+        email,
+        fullName,
+        role: profile.role === "instructor" ? "instructor" : "student",
+      };
+      setIdentity(nextIdentity);
+      setAuthOpen(false);
+      setAuthError("");
+      setStudentName(fullName.slice(0, 24));
+      setAuthLoading(false);
+
+      const pendingIntent = localStorage.getItem(
+        "dou-auth-intent",
+      ) as AuthIntent | null;
+      const pendingJoin = sessionStorage.getItem("dou-pending-join");
+      localStorage.removeItem("dou-auth-intent");
+      if (pendingJoin) {
+        sessionStorage.removeItem("dou-pending-join");
+        setCode(pendingJoin);
+        setMode("student");
+      } else if (pendingIntent === "instructor") {
+        if (nextIdentity.role === "instructor") setMode("teacher");
+        else {
+          setMode("student-dashboard");
+          setAuthError(
+            "Bu hesap öğrenci rolünde. Akademisyen yetkisini sistem yöneticisi tanımlar.",
+          );
+          setAuthOpen(true);
+        }
+      } else if (pendingIntent === "student") setMode("student-dashboard");
+    };
+    supabase.auth
+      .getSession()
+      .then(({ data }) => resolveIdentity(data.session?.user || null));
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        window.setTimeout(() => resolveIdentity(session?.user || null), 0);
+      },
+    );
+    return () => authListener.subscription.unsubscribe();
+  }, []);
   useEffect(() => {
     try {
       const saved = localStorage.getItem("dou-activities");
@@ -300,39 +393,107 @@ export default function Home() {
     setToast(m);
     setTimeout(() => setToast(""), 2200);
   };
+  const requestLogin = (intent: AuthIntent) => {
+    setAuthIntent(intent);
+    setAuthError("");
+    setAuthOpen(true);
+  };
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setIdentity(null);
+    setMode("landing");
+    notify("Kurumsal oturum kapatıldı");
+  };
   if (mode === "student")
     return (
       <StudentStage
         name={studentName}
         code={code || "481 209"}
-        onExit={() => setMode("landing")}
+        onExit={() => setMode(identity ? "student-dashboard" : "landing")}
       />
     );
-  if (mode === "landing")
+  if (mode === "student-dashboard" && identity)
     return (
-      <Landing
+      <StudentDashboard
+        identity={identity}
         code={code}
         setCode={setCode}
-        name={studentName}
-        setName={setStudentName}
-        teacher={() => setMode("teacher")}
         join={() => {
           const clean = code.replace(/\s/g, "");
           if (!/^\d{5,6}$/.test(clean)) {
             notify("5 veya 6 haneli oturum kodunu gir");
             return;
           }
-          const nameError = validateParticipantName(studentName);
-          if (nameError) {
-            notify(nameError);
-            return;
-          }
-          setStudentName(studentName.trim().replace(/\s+/g, " "));
           setMode("student");
         }}
+        exit={() => setMode("landing")}
+        signOut={signOut}
         toast={toast}
       />
     );
+  if (mode === "landing")
+    return (
+      <>
+        <Landing
+          code={code}
+          setCode={setCode}
+          name={identity?.fullName.slice(0, 24) || studentName}
+          setName={setStudentName}
+          identity={identity}
+          studentLogin={() =>
+            identity ? setMode("student-dashboard") : requestLogin("student")
+          }
+          teacher={() => {
+            if (identity?.role === "instructor") setMode("teacher");
+            else requestLogin("instructor");
+          }}
+          join={() => {
+            const clean = code.replace(/\s/g, "");
+            if (!/^\d{5,6}$/.test(clean)) {
+              notify("5 veya 6 haneli oturum kodunu gir");
+              return;
+            }
+            if (!identity) {
+              sessionStorage.setItem("dou-pending-join", clean);
+              requestLogin("student");
+              return;
+            }
+            setStudentName(identity.fullName.slice(0, 24));
+            setMode("student");
+          }}
+          toast={toast}
+        />
+        {authOpen && (
+          <MicrosoftAuthDialog
+            intent={authIntent}
+            setIntent={setAuthIntent}
+            loading={authLoading}
+            error={authError}
+            close={() => {
+              setAuthOpen(false);
+              setAuthError("");
+            }}
+          />
+        )}
+      </>
+    );
+  if (!identity || identity.role !== "instructor") {
+    return (
+      <main className="auth-guard">
+        <div>
+          <b>Akademisyen yetkisi gerekli</b>
+          <button
+            onClick={() => {
+              setMode("landing");
+              requestLogin("instructor");
+            }}
+          >
+            Kurumsal girişe dön
+          </button>
+        </div>
+      </main>
+    );
+  }
   return (
     <main className="app-shell">
       <Sidebar view={view} setView={setView} exit={() => setMode("landing")} />
@@ -362,6 +523,18 @@ export default function Home() {
             </h1>
           </div>
           <div className="head-actions">
+            <div className="account-chip">
+              <span>
+                {identity.fullName.charAt(0).toLocaleUpperCase("tr-TR")}
+              </span>
+              <div>
+                <b>{identity.fullName}</b>
+                <small>Öğretim görevlisi</small>
+              </div>
+              <button onClick={signOut} aria-label="Oturumu kapat">
+                ↪
+              </button>
+            </div>
             <button
               className="icon-button"
               aria-label="Bildirimleri aç"
@@ -3424,11 +3597,245 @@ function StudentStage({
     </main>
   );
 }
+function MicrosoftAuthDialog({
+  intent,
+  setIntent,
+  loading,
+  error,
+  close,
+}: {
+  intent: AuthIntent;
+  setIntent: (value: AuthIntent) => void;
+  loading: boolean;
+  error: string;
+  close: () => void;
+}) {
+  const [connecting, setConnecting] = useState(false);
+  const [localError, setLocalError] = useState("");
+  const login = async () => {
+    setConnecting(true);
+    setLocalError("");
+    localStorage.setItem("dou-auth-intent", intent);
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: {
+        scopes: "openid profile email",
+        redirectTo: window.location.origin,
+        queryParams: { prompt: "select_account" },
+      },
+    });
+    if (oauthError) {
+      localStorage.removeItem("dou-auth-intent");
+      setLocalError(
+        oauthError.message.includes("provider is not enabled")
+          ? "Microsoft 365 bağlantısı henüz kurum yöneticisi tarafından etkinleştirilmedi."
+          : oauthError.message,
+      );
+      setConnecting(false);
+    }
+  };
+  return (
+    <div
+      className="auth-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="auth-title"
+    >
+      <section className="microsoft-auth-card">
+        <button
+          className="auth-close"
+          onClick={close}
+          aria-label="Giriş penceresini kapat"
+        >
+          ×
+        </button>
+        <div className="auth-brand">
+          <Logo />
+          <span>Kurumsal erişim</span>
+        </div>
+        <div className="microsoft-mark" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+          <i />
+        </div>
+        <span className="overline">DOĞUŞ ÜNİVERSİTESİ · MICROSOFT 365</span>
+        <h2 id="auth-title">Okul hesabınla devam et</h2>
+        <p>
+          Şifre DOU DersAktif ile paylaşılmaz. Microsoft’un güvenli giriş
+          ekranına yönlendirilirsin.
+        </p>
+        <div className="role-switch" role="tablist" aria-label="Giriş rolü">
+          <button
+            className={intent === "student" ? "active" : ""}
+            onClick={() => setIntent("student")}
+          >
+            <span>🎓</span>
+            <b>Öğrenci</b>
+            <small>Etkinliklere katıl</small>
+          </button>
+          <button
+            className={intent === "instructor" ? "active" : ""}
+            onClick={() => setIntent("instructor")}
+          >
+            <span>◆</span>
+            <b>Öğretim görevlisi</b>
+            <small>Etkinlik oluştur</small>
+          </button>
+        </div>
+        {(error || localError) && (
+          <div className="auth-error">⚠ {error || localError}</div>
+        )}
+        <button
+          className="microsoft-login"
+          onClick={login}
+          disabled={connecting || loading}
+        >
+          <span className="ms-icon">
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+          {connecting
+            ? "Microsoft’a bağlanıyor…"
+            : "Microsoft 365 ile giriş yap"}
+          <em>→</em>
+        </button>
+        <div className="auth-domain">
+          <i>✓</i>
+          <span>
+            Yalnızca <b>@dogus.edu.tr</b> hesapları
+          </span>
+        </div>
+        <small className="auth-role-note">
+          Akademisyen yetkisi kurumsal yetki listesinden doğrulanır; kullanıcı
+          rolünü kendisi değiştiremez.
+        </small>
+      </section>
+    </div>
+  );
+}
+
+function StudentDashboard({
+  identity,
+  code,
+  setCode,
+  join,
+  exit,
+  signOut,
+  toast,
+}: {
+  identity: Identity;
+  code: string;
+  setCode: (value: string) => void;
+  join: () => void;
+  exit: () => void;
+  signOut: () => void;
+  toast: string;
+}) {
+  return (
+    <main className="student-portal">
+      <nav>
+        <Logo />
+        <div>
+          <button onClick={exit}>Ana sayfa</button>
+          <button className="portal-signout" onClick={signOut}>
+            Çıkış yap
+          </button>
+        </div>
+      </nav>
+      <section className="student-portal-hero">
+        <div>
+          <span className="portal-kicker">● MICROSOFT 365 İLE DOĞRULANDI</span>
+          <h1>
+            Hazırsan sınıfa
+            <br />
+            <em>enerjini kat.</em>
+          </h1>
+          <p>
+            Canlı quizlere, takım yarışlarına ve sınıf görevlerine kurumsal
+            kimliğinle güvenle katıl.
+          </p>
+        </div>
+        <aside className="portal-join-card">
+          <span>CANLI OTURUMA KATIL</span>
+          <h2>Tahtadaki kodu gir</h2>
+          <input
+            value={code}
+            onChange={(e) =>
+              setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+            }
+            onKeyDown={(e) => e.key === "Enter" && join()}
+            inputMode="numeric"
+            placeholder="000 000"
+            aria-label="Oturum kodu"
+          />
+          <button onClick={join}>
+            Oyuna katıl <b>→</b>
+          </button>
+          <small>5 veya 6 haneli sınıf kodu</small>
+        </aside>
+      </section>
+      <section className="student-profile-strip">
+        <div className="student-avatar">
+          {identity.fullName.charAt(0).toLocaleUpperCase("tr-TR")}
+        </div>
+        <div>
+          <small>HOŞ GELDİN</small>
+          <b>{identity.fullName}</b>
+          <span>{identity.email}</span>
+        </div>
+        <i>Kurumsal öğrenci hesabı</i>
+      </section>
+      <section className="student-portal-grid">
+        <article>
+          <i>🔥</i>
+          <div>
+            <small>AKTİF SERİ</small>
+            <strong>0 gün</strong>
+            <span>İlk etkinliğinle seriyi başlat</span>
+          </div>
+        </article>
+        <article>
+          <i>◆</i>
+          <div>
+            <small>TOPLAM XP</small>
+            <strong>0 XP</strong>
+            <span>Puanların burada birikecek</span>
+          </div>
+        </article>
+        <article>
+          <i>♛</i>
+          <div>
+            <small>ROZETLER</small>
+            <strong>0 rozet</strong>
+            <span>Başarılarını görünür kıl</span>
+          </div>
+        </article>
+      </section>
+      <section className="portal-empty">
+        <span>✦</span>
+        <div>
+          <h3>İlk sınıf maceran seni bekliyor.</h3>
+          <p>
+            Öğretim görevlisinin paylaştığı kodla katıldığın etkinlikler burada
+            görünecek.
+          </p>
+        </div>
+      </section>
+      {toast && <div className="toast">{toast}</div>}
+    </main>
+  );
+}
+
 function Landing({
   code,
   setCode,
   name,
   setName,
+  identity,
+  studentLogin,
   teacher,
   join,
   toast,
@@ -3437,6 +3844,8 @@ function Landing({
   setCode: (v: string) => void;
   name: string;
   setName: (v: string) => void;
+  identity: Identity | null;
+  studentLogin: () => void;
   teacher: () => void;
   join: () => void;
   toast: string;
@@ -3452,8 +3861,13 @@ function Landing({
         <div>
           <a href="#araclar">Etkinlikler</a>
           <a href="#nasil">Nasıl çalışır?</a>
+          <button className="student-login-link" onClick={studentLogin}>
+            {identity ? "Öğrenci panelim" : "Öğrenci girişi"}
+          </button>
           <button className="ghost" onClick={teacher}>
-            Akademisyen girişi
+            {identity?.role === "instructor"
+              ? "Akademisyen panelim"
+              : "Akademisyen girişi"}
           </button>
         </div>
       </nav>
@@ -3507,7 +3921,9 @@ function Landing({
               </span>
             </div>
             <h2>Derse bağlan</h2>
-            <p>Tahtadaki altı haneli oturum kodunu gir.</p>
+            <p>
+              Tahtadaki oturum kodunu gir, kurumsal Microsoft hesabınla katıl.
+            </p>
             <div className="join-steps" aria-hidden="true">
               <b>1</b>
               <span>Kodu gir</span>
@@ -3546,25 +3962,28 @@ function Landing({
                 value={name}
                 onChange={(e) => setName(e.target.value.slice(0, 24))}
                 onKeyDown={submitOnEnter}
-                placeholder="Ad Soyad"
+                placeholder="Microsoft profilinden alınacak"
                 maxLength={24}
                 autoComplete="name"
                 aria-describedby="name-safety-rule"
                 aria-invalid={Boolean(nameError)}
+                readOnly
               />
               <small
                 id="name-safety-rule"
                 className={`name-rule ${nameError ? "invalid" : name ? "valid" : ""}`}
               >
-                {nameError ||
-                  (name
-                    ? "✓ Görünen ad uygun"
-                    : "Küfür, argo ve uygunsuz adlar engellenir")}
+                {identity
+                  ? `✓ Microsoft 365 · ${identity.email}`
+                  : nameError ||
+                    (name
+                      ? "✓ Görünen ad uygun"
+                      : "Adın Microsoft 365 profilinden alınır")}
               </small>
             </div>
             <button onClick={join}>Oturuma katıl →</button>
             <small className="safe-name-note">
-              <span>◆</span> Hesap gerekmez · Güvenli ad filtresi aktif
+              <span>◆</span> Microsoft 365 doğrulaması · Güvenli ad filtresi
             </small>
           </div>
           <div className="mini-leader">

@@ -3140,6 +3140,630 @@ button {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* V9 · Microsoft 365 kurumsal kimlik ve rol panelleri */
+.student-login-link {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 750;
+  cursor: pointer;
+}
+.auth-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #171214c7;
+  backdrop-filter: blur(14px);
+  animation: authFade 0.2s ease both;
+}
+@keyframes authFade {
+  from {
+    opacity: 0;
+  }
+}
+.microsoft-auth-card {
+  position: relative;
+  width: min(520px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  border: 1px solid #ffffff55;
+  border-radius: 30px;
+  background: #fff;
+  padding: 34px;
+  box-shadow:
+    0 35px 100px #0008,
+    12px 12px 0 #d70926;
+  animation: authCardIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes authCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.97);
+  }
+}
+.auth-close {
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e5e0e2;
+  border-radius: 50%;
+  background: #f8f6f4;
+  font-size: 22px;
+  cursor: pointer;
+}
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.auth-brand > span {
+  border-left: 1px solid #ddd;
+  padding-left: 14px;
+  color: #716b72;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.microsoft-mark {
+  display: grid;
+  grid-template-columns: repeat(2, 13px);
+  gap: 3px;
+  margin-bottom: 16px;
+}
+.microsoft-mark i,
+.ms-icon i {
+  width: 13px;
+  height: 13px;
+  background: #f35325;
+}
+.microsoft-mark i:nth-child(2),
+.ms-icon i:nth-child(2) {
+  background: #81bc06;
+}
+.microsoft-mark i:nth-child(3),
+.ms-icon i:nth-child(3) {
+  background: #05a6f0;
+}
+.microsoft-mark i:nth-child(4),
+.ms-icon i:nth-child(4) {
+  background: #ffba08;
+}
+.microsoft-auth-card h2 {
+  margin: 8px 0 8px;
+  font:
+    850 34px/1.08 Manrope,
+    sans-serif;
+  letter-spacing: -1.5px;
+}
+.microsoft-auth-card > p {
+  color: #6e6870;
+  line-height: 1.6;
+  font-size: 14px;
+}
+.role-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 23px 0 16px;
+}
+.role-switch button {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  grid-template-rows: auto auto;
+  text-align: left;
+  gap: 2px 9px;
+  border: 1px solid #ddd8dc;
+  border-radius: 16px;
+  background: #faf9f7;
+  padding: 14px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.role-switch button > span {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #eee9eb;
+}
+.role-switch button b {
+  align-self: end;
+  font-size: 12px;
+}
+.role-switch button small {
+  color: #7c747c;
+  font-size: 10px;
+}
+.role-switch button.active {
+  border-color: var(--red);
+  background: #fff4f5;
+  box-shadow: 0 0 0 3px #d709260d;
+}
+.role-switch button.active > span {
+  background: var(--red);
+  color: #fff;
+}
+.microsoft-login {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  min-height: 56px;
+  border: 0;
+  border-radius: 15px;
+  background: #201b1d;
+  color: #fff;
+  padding: 12px 16px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 7px 0 #000;
+}
+.microsoft-login:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.microsoft-login em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 19px;
+}
+.ms-icon {
+  display: grid;
+  grid-template-columns: repeat(2, 10px);
+  gap: 2px;
+}
+.ms-icon i {
+  width: 10px;
+  height: 10px;
+}
+.auth-domain {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 21px;
+  color: #5f5961;
+  font-size: 12px;
+}
+.auth-domain i {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #e5f7ef;
+  color: #087a63;
+  font-style: normal;
+  font-weight: 900;
+}
+.auth-role-note {
+  display: block;
+  margin-top: 16px;
+  border-top: 1px solid #ece8ea;
+  padding-top: 14px;
+  color: #898188;
+  text-align: center;
+  line-height: 1.45;
+}
+.auth-error {
+  margin: 0 0 14px;
+  border: 1px solid #ffd1d7;
+  border-radius: 12px;
+  background: #fff3f5;
+  color: #9f0d22;
+  padding: 11px 13px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.auth-guard {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+}
+.auth-guard > div { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.auth-guard button { border: 0; border-radius: 12px; background: var(--red); color: #fff; padding: 12px 18px; font-weight: 800; cursor: pointer; }
+.account-chip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #fff;
+  padding: 6px 7px 6px 9px;
+}
+.account-chip > span {
+  display: grid;
+  place-items: center;
+  width: 33px;
+  height: 33px;
+  border-radius: 10px;
+  background: var(--red);
+  color: #fff;
+  font-weight: 900;
+}
+.account-chip > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 105px;
+}
+.account-chip b {
+  max-width: 135px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.account-chip small {
+  color: #837c83;
+  font-size: 9px;
+}
+.account-chip button {
+  border: 0;
+  background: #f3f0f1;
+  border-radius: 9px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+}
+
+.student-portal {
+  min-height: 100vh;
+  background: #f3f1ee;
+  color: var(--ink);
+  overflow: hidden;
+}
+.student-portal > nav {
+  max-width: 1180px;
+  min-height: 78px;
+  margin: auto;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.student-portal > nav > div {
+  display: flex;
+  gap: 8px;
+}
+.student-portal > nav button {
+  border: 1px solid #ddd8d7;
+  border-radius: 11px;
+  background: #fff;
+  padding: 10px 14px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.student-portal > nav .portal-signout {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+.student-portal-hero {
+  position: relative;
+  max-width: 1180px;
+  min-height: 390px;
+  margin: 0 auto;
+  padding: 55px 60px;
+  display: grid;
+  grid-template-columns: 1.25fr 0.75fr;
+  align-items: center;
+  gap: 70px;
+  border-radius: 32px;
+  background: var(--ink);
+  color: #fff;
+  overflow: hidden;
+}
+.student-portal-hero:before {
+  content: "◆";
+  position: absolute;
+  right: 35%;
+  top: -120px;
+  color: #d7092630;
+  font-size: 360px;
+  transform: rotate(15deg);
+}
+.portal-kicker {
+  color: #ff566f;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+}
+.student-portal-hero h1 {
+  position: relative;
+  margin: 15px 0;
+  font:
+    850 52px/0.98 Manrope,
+    sans-serif;
+  letter-spacing: -3px;
+}
+.student-portal-hero h1 em {
+  color: #ff2c4d;
+  font-style: normal;
+}
+.student-portal-hero > div > p {
+  position: relative;
+  max-width: 570px;
+  color: #c9c4c7;
+  line-height: 1.65;
+}
+.portal-join-card {
+  position: relative;
+  border-radius: 22px;
+  background: #fff;
+  color: var(--ink);
+  padding: 25px;
+  box-shadow: 10px 10px 0 var(--red);
+}
+.portal-join-card > span {
+  color: var(--red);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+}
+.portal-join-card h2 {
+  margin: 7px 0 17px;
+  font-size: 23px;
+}
+.portal-join-card input {
+  width: 100%;
+  min-height: 58px;
+  border: 1px solid #dcd7da;
+  border-radius: 13px;
+  background: #f8f6f4;
+  padding: 14px;
+  font: 850 23px/1 Manrope;
+  letter-spacing: 7px;
+  outline: none;
+}
+.portal-join-card input:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 4px #d7092612;
+}
+.portal-join-card button {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 11px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--red);
+  color: #fff;
+  font-weight: 850;
+  cursor: pointer;
+}
+.portal-join-card button b {
+  float: right;
+}
+.portal-join-card > small {
+  display: block;
+  margin-top: 10px;
+  text-align: center;
+  color: #827a81;
+}
+.student-profile-strip {
+  max-width: 1080px;
+  margin: -1px auto 0;
+  padding: 25px 30px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border: 1px solid #e0dcda;
+  border-radius: 0 0 22px 22px;
+}
+.student-avatar {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--red);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 900;
+}
+.student-profile-strip > div:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+}
+.student-profile-strip small {
+  color: var(--red);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.student-profile-strip span {
+  color: #7a7478;
+  font-size: 11px;
+}
+.student-profile-strip > i {
+  margin-left: auto;
+  border-radius: 999px;
+  background: #e6f7f0;
+  color: #087a63;
+  padding: 8px 11px;
+  font: 750 10px/1 Manrope;
+}
+.student-portal-grid {
+  max-width: 1080px;
+  margin: 25px auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.student-portal-grid article {
+  display: flex;
+  gap: 14px;
+  border: 1px solid #e1ddda;
+  border-radius: 18px;
+  background: #fff;
+  padding: 20px;
+}
+.student-portal-grid article > i {
+  display: grid;
+  place-items: center;
+  width: 45px;
+  height: 45px;
+  flex: 0 0 45px;
+  border-radius: 13px;
+  background: #f5e7e9;
+  font-style: normal;
+}
+.student-portal-grid article > div {
+  display: flex;
+  flex-direction: column;
+}
+.student-portal-grid small {
+  color: #8d8589;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.student-portal-grid strong {
+  margin: 3px 0;
+  font-size: 20px;
+}
+.student-portal-grid span {
+  color: #777075;
+  font-size: 10px;
+}
+.portal-empty {
+  max-width: 1080px;
+  margin: 0 auto 50px;
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  border: 1px dashed #cec7c6;
+  border-radius: 18px;
+  padding: 22px;
+}
+.portal-empty > span {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--ink);
+  color: #fff;
+}
+.portal-empty h3 {
+  margin: 0 0 4px;
+}
+.portal-empty p {
+  margin: 0;
+  color: #777075;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .student-portal-hero {
+    margin-inline: 18px;
+    grid-template-columns: 1fr;
+    gap: 35px;
+    padding: 45px;
+  }
+  .student-profile-strip,
+  .student-portal-grid,
+  .portal-empty {
+    margin-left: 28px;
+    margin-right: 28px;
+  }
+  .student-profile-strip {
+    max-width: none;
+  }
+  .student-portal-grid {
+    grid-template-columns: 1fr;
+  }
+  .account-chip > div {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .student-login-link {
+    display: none;
+  }
+  .auth-overlay {
+    padding: 12px;
+    align-items: end;
+  }
+  .microsoft-auth-card {
+    max-height: calc(100dvh - 12px);
+    padding: 27px 20px 23px;
+    border-radius: 26px 26px 18px 18px;
+    box-shadow: 0 -10px 50px #0006;
+  }
+  .microsoft-auth-card h2 {
+    font-size: 29px;
+    padding-right: 32px;
+  }
+  .auth-brand {
+    margin-bottom: 20px;
+  }
+  .role-switch {
+    grid-template-columns: 1fr;
+  }
+  .role-switch button {
+    min-height: 62px;
+  }
+  .student-portal > nav {
+    min-height: 68px;
+    padding: 0 17px;
+  }
+  .student-portal > nav button:first-child {
+    display: none;
+  }
+  .student-portal-hero {
+    min-height: 0;
+    margin: 0 12px;
+    padding: 32px 20px 26px;
+    border-radius: 24px;
+  }
+  .student-portal-hero h1 {
+    font-size: 39px;
+    letter-spacing: -2px;
+  }
+  .student-portal-hero > div > p {
+    font-size: 14px;
+  }
+  .portal-join-card {
+    padding: 20px;
+    box-shadow: 6px 6px 0 var(--red);
+  }
+  .student-profile-strip {
+    margin: 0 20px;
+    padding: 18px;
+  }
+  .student-profile-strip > i {
+    display: none;
+  }
+  .student-profile-strip b {
+    font-size: 13px;
+  }
+  .student-portal-grid,
+  .portal-empty {
+    margin-left: 20px;
+    margin-right: 20px;
+  }
+  .portal-empty {
+    align-items: flex-start;
+  }
+  .portal-empty h3 {
+    font-size: 15px;
+  }
+}
 .live-word-cloud {
   min-height: 270px;
   background: #fff;

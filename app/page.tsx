@@ -440,8 +440,6 @@ export default function Home() {
         <Landing
           code={code}
           setCode={setCode}
-          name={identity?.fullName.slice(0, 24) || studentName}
-          setName={setStudentName}
           identity={identity}
           studentLogin={() =>
             identity ? setMode("student-dashboard") : requestLogin("student")
@@ -3997,8 +3995,6 @@ function StudentDashboard({
 function Landing({
   code,
   setCode,
-  name,
-  setName,
   identity,
   studentLogin,
   teacher,
@@ -4007,15 +4003,12 @@ function Landing({
 }: {
   code: string;
   setCode: (v: string) => void;
-  name: string;
-  setName: (v: string) => void;
   identity: Identity | null;
   studentLogin: () => void;
   teacher: () => void;
   join: () => void;
   toast: string;
 }) {
-  const nameError = name ? validateParticipantName(name) : "";
   const submitOnEnter = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") join();
   };
@@ -4075,11 +4068,6 @@ function Landing({
             </span>
           </div>
           <div className="join-card">
-            <div className="campus-mark">
-              ÜNİVERSİTE
-              <br />
-              <b>ETKİLEŞİM AĞI</b>
-            </div>
             <div className="join-head">
               <span className="join-label">ÖĞRENCİ KATILIMI</span>
               <span className="join-live">
@@ -4095,7 +4083,7 @@ function Landing({
               <span>Kodu gir</span>
               <i />
               <b>2</b>
-              <span>Adını yaz</span>
+              <span>Doğrulan</span>
               <i />
               <b>3</b>
               <span>Oyundasın</span>
@@ -4116,36 +4104,21 @@ function Landing({
                 aria-label="5 veya 6 haneli oturum kodu"
               />
             </div>
-            <div className="join-field">
-              <label htmlFor="participant-name">Görünen ad</label>
-              <input
-                id="participant-name"
-                className={
-                  nameError
-                    ? "participant-name-input invalid"
-                    : "participant-name-input"
-                }
-                value={name}
-                onChange={(e) => setName(e.target.value.slice(0, 24))}
-                onKeyDown={submitOnEnter}
-                placeholder="Microsoft profilinden alınacak"
-                maxLength={24}
-                autoComplete="name"
-                aria-describedby="name-safety-rule"
-                aria-invalid={Boolean(nameError)}
-                readOnly
-              />
-              <small
-                id="name-safety-rule"
-                className={`name-rule ${nameError ? "invalid" : name ? "valid" : ""}`}
-              >
+            <div className={`identity-preview ${identity ? "verified" : ""}`}>
+              <span className="identity-avatar" aria-hidden="true">
                 {identity
-                  ? `✓ Microsoft 365 · ${identity.email}`
-                  : nameError ||
-                    (name
-                      ? "✓ Görünen ad uygun"
-                      : "Adın Microsoft 365 profilinden alınır")}
-              </small>
+                  ? identity.fullName.charAt(0).toLocaleUpperCase("tr-TR")
+                  : "M"}
+              </span>
+              <span>
+                <b>{identity ? identity.fullName : "Kurumsal görünen ad"}</b>
+                <small>
+                  {identity
+                    ? identity.email
+                    : "Microsoft 365 profilinden otomatik alınır"}
+                </small>
+              </span>
+              <i aria-hidden="true">{identity ? "✓" : "365"}</i>
             </div>
             <button onClick={join}>Oturuma katıl →</button>
             <small className="safe-name-note">

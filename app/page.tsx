@@ -17,6 +17,7 @@ type Activity = {
   plays: number;
   accent: string;
   content?: Question[];
+  shuffle?: boolean;
 };
 const starters: Activity[] = [
   {
@@ -231,6 +232,7 @@ export default function Home() {
           type={playing}
           title={selected.title}
           questions={selected.content || quiz}
+          shuffle={selected.shuffle}
           close={() => setPlaying(null)}
         />
       )}{" "}
@@ -602,6 +604,10 @@ function Builder({
   const [title, setTitle] = useState("");
   const [questions, setQuestions] = useState<Question[]>([blank()]);
   const [active, setActive] = useState(0);
+  const [topic, setTopic] = useState("");
+  const [difficulty, setDifficulty] = useState("Orta");
+  const [shuffle, setShuffle] = useState(true);
+  const [generatorOpen, setGeneratorOpen] = useState(false);
   const current = questions[active];
   const update = (next: Partial<Question>) =>
     setQuestions((all) =>
@@ -620,6 +626,113 @@ function Builder({
     setQuestions((all) => all.filter((_, i) => i !== active));
     setActive(Math.max(0, active - 1));
   };
+  const generate = () => {
+    const subject = topic.trim() || "Ders konusu";
+    const lower = subject.toLocaleLowerCase("tr-TR");
+    const pool = lower.includes("python")
+      ? [
+          {
+            q: "Python'da bir döngüyü sonlandırmak için hangi ifade kullanılır?",
+            a: ["break", "stop", "exit", "return all"],
+            correct: 0,
+          },
+          {
+            q: "range(5) ifadesi hangi değerle başlar?",
+            a: ["0", "1", "5", "-1"],
+            correct: 0,
+          },
+          {
+            q: "Liste üzerinde gezinmek için en uygun yapı hangisidir?",
+            a: ["for döngüsü", "class", "import", "try"],
+            correct: 0,
+          },
+          {
+            q: "while döngüsü ne zamana kadar çalışır?",
+            a: [
+              "Koşul doğruyken",
+              "Bir kez",
+              "Dosya açılana kadar",
+              "Daima 10 kez",
+            ],
+            correct: 0,
+          },
+        ]
+      : lower.includes("ağ") || lower.includes("network")
+        ? [
+            {
+              q: "Bir ağdaki cihazları mantıksal olarak ayıran yapı hangisidir?",
+              a: ["VLAN", "HDMI", "BIOS", "GPU"],
+              correct: 0,
+            },
+            {
+              q: "IP adresini otomatik dağıtan protokol hangisidir?",
+              a: ["DHCP", "FTP", "SSH", "SMTP"],
+              correct: 0,
+            },
+            {
+              q: "Web trafiğinde güvenli bağlantı hangi protokolle sağlanır?",
+              a: ["HTTPS", "HTTP", "TFTP", "ARP"],
+              correct: 0,
+            },
+            {
+              q: "Yerel ağ cihazlarını birbirine bağlayan temel cihaz hangisidir?",
+              a: ["Switch", "Yazıcı", "Tarayıcı", "Klavye"],
+              correct: 0,
+            },
+          ]
+        : [
+            {
+              q: `${subject} konusunun temel amacı hangisidir?`,
+              a: [
+                "Kavramı doğru uygulamak",
+                "Ezber yapmak",
+                "Konuyu atlamak",
+                "Süreyi doldurmak",
+              ],
+              correct: 0,
+            },
+            {
+              q: `${subject} için en güvenilir öğrenme yöntemi hangisidir?`,
+              a: [
+                "Uygulama ve geri bildirim",
+                "Yalnızca okumak",
+                "Tahmin etmek",
+                "Tekrar etmemek",
+              ],
+              correct: 0,
+            },
+            {
+              q: `${subject} ile ilgili bir problemi çözerken ilk adım nedir?`,
+              a: [
+                "Problemi tanımlamak",
+                "Sonucu yazmak",
+                "Kaynağı kapatmak",
+                "Rastgele seçim",
+              ],
+              correct: 0,
+            },
+            {
+              q: `${subject} öğrenmesinde başarıyı ne gösterir?`,
+              a: [
+                "Bilgiyi yeni durumda kullanmak",
+                "Metni kopyalamak",
+                "Sadece dinlemek",
+                "Soruyu geçmek",
+              ],
+              correct: 0,
+            },
+          ];
+    setQuestions(
+      pool.map((q) => ({
+        ...q,
+        seconds: difficulty === "Kolay" ? 30 : difficulty === "Zor" ? 15 : 20,
+      })),
+    );
+    setTitle((old) => old || `${subject} · ${difficulty} Quiz`);
+    setActive(0);
+    setGeneratorOpen(false);
+  };
+  const makeTrueFalse = () => update({ a: ["Doğru", "Yanlış"], correct: 0 });
   const finish = () =>
     save({
       id: Date.now(),
@@ -633,6 +746,7 @@ function Builder({
         q: q.q.trim() || `${i + 1}. soru`,
         a: q.a.map((a, j) => a.trim() || `${j + 1}. seçenek`),
       })),
+      shuffle,
     });
 
   return (
@@ -667,7 +781,35 @@ function Builder({
               ))}
             </select>
           </label>
+          <button
+            className="smart-generate-button"
+            onClick={() => setGeneratorOpen((v) => !v)}
+          >
+            ✦ Akıllı soru üret
+          </button>
         </div>
+        {generatorOpen && (
+          <div className="smart-generator">
+            <div>
+              <b>✦ Akıllı Quiz Taslağı</b>
+              <small>Konuya göre düzenlenebilir dört soru oluşturur.</small>
+            </div>
+            <input
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="Örn. Python döngüleri, Ağ güvenliği…"
+            />
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value)}
+            >
+              <option>Kolay</option>
+              <option>Orta</option>
+              <option>Zor</option>
+            </select>
+            <button onClick={generate}>Taslağı oluştur →</button>
+          </div>
+        )}
         <div className="builder-workspace">
           <aside>
             <div>
@@ -706,6 +848,7 @@ function Builder({
                 </select>
               </label>
               <button onClick={duplicate}>⧉ Çoğalt</button>
+              <button onClick={makeTrueFalse}>◐ Doğru/Yanlış</button>
               <button onClick={remove}>⌫ Sil</button>
             </div>
             <textarea
@@ -755,6 +898,14 @@ function Builder({
             )}{" "}
             dakika
           </span>
+          <label className="shuffle-setting">
+            <input
+              type="checkbox"
+              checked={shuffle}
+              onChange={(e) => setShuffle(e.target.checked)}
+            />{" "}
+            Soruları karıştır
+          </label>
           <button className="primary" onClick={finish}>
             Kaydet ve kütüphaneye ekle ✓
           </button>
@@ -771,11 +922,13 @@ function Arena({
   type,
   title,
   questions = quiz,
+  shuffle = false,
   close,
 }: {
   type: GameType;
   title: string;
   questions?: Question[];
+  shuffle?: boolean;
   close: () => void;
 }) {
   const code = "481209";
@@ -785,8 +938,11 @@ function Arena({
   const [answers, setAnswers] = useState(0);
   const [answerStats, setAnswerStats] = useState([0, 0, 0, 0]);
   const [timeLeft, setTimeLeft] = useState(20);
+  const [gameQuestions] = useState(() =>
+    shuffle ? [...questions].sort(() => Math.random() - 0.5) : questions,
+  );
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const current = questions[round % questions.length];
+  const current = gameQuestions[round % gameQuestions.length];
 
   useEffect(() => {
     const channel = supabase.channel(roomTopic(code), {
@@ -837,7 +993,7 @@ function Arena({
     setRound(nextRound);
     setAnswers(0);
     setAnswerStats([0, 0, 0, 0]);
-    setTimeLeft(questions[nextRound % questions.length].seconds || 20);
+    setTimeLeft(gameQuestions[nextRound % gameQuestions.length].seconds || 20);
     channelRef.current?.send({
       type: "broadcast",
       event: "game-state",
@@ -846,7 +1002,7 @@ function Arena({
         round: nextRound,
         title,
         type,
-        question: questions[nextRound % questions.length],
+        question: gameQuestions[nextRound % gameQuestions.length],
         startedAt: Date.now(),
       },
     });
@@ -907,7 +1063,7 @@ function Arena({
           <section className="quiz-arena">
             <div className="quiz-meta">
               <span>
-                SORU {round + 1} / {questions.length}
+                SORU {round + 1} / {gameQuestions.length}
               </span>
               <b className={timeLeft <= 5 ? "timer-danger" : ""}>
                 ⏱ {timeLeft} sn · {answers} yanıt
@@ -957,12 +1113,12 @@ function Arena({
             <button
               className="primary"
               onClick={() =>
-                round + 1 < questions.length
+                round + 1 < gameQuestions.length
                   ? broadcast("question", round + 1)
                   : broadcast("final")
               }
             >
-              {round + 1 < questions.length
+              {round + 1 < gameQuestions.length
                 ? "Sonraki soru →"
                 : "Finali göster →"}
             </button>

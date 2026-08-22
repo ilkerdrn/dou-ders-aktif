@@ -1699,6 +1699,120 @@ button {
   transform: rotate(1deg);
 }
 
+/* V2 medya soruları ve kütüphane yönetimi */
+.library-search {
+  margin-left: auto;
+  min-width: 220px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 20px;
+  padding: 8px 13px;
+  font-size: 11px;
+}
+.library-card .danger-action {
+  color: var(--red);
+  background: #fde9ed;
+}
+.question-media {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+.question-media span {
+  font-size: 9px;
+  color: var(--muted);
+}
+.question-media > button {
+  margin-left: auto;
+  border: 0;
+  background: #fde9ed;
+  color: var(--red);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 9px;
+}
+.image-upload {
+  display: inline-flex !important;
+  align-items: center;
+  margin: 0 !important;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--red);
+  cursor: pointer;
+}
+.image-upload input {
+  display: none;
+}
+.question-image-preview {
+  height: 190px;
+  border: 1px dashed #bbb;
+  border-radius: 14px;
+  background: #f2f2ef;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.question-image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.game-question-image {
+  height: 190px;
+  max-width: 620px;
+  margin: -12px auto 20px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #222;
+}
+.game-question-image img,
+.student-question-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.student-question-image {
+  height: 180px;
+  max-width: 560px;
+  margin: -15px auto 18px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #eee;
+}
+.quiz-arena:has(.game-question-image) > h3 {
+  font-size: 23px;
+  margin-bottom: 22px;
+}
+.student-stage section:has(.student-question-image) > h1 {
+  font-size: 25px;
+  margin-bottom: 26px;
+}
+@media (max-width: 600px) {
+  .library-search {
+    min-width: 100%;
+    order: 20;
+  }
+  .question-media {
+    flex-wrap: wrap;
+  }
+  .question-media > button {
+    margin-left: 0;
+  }
+  .question-image-preview,
+  .student-question-image {
+    height: 145px;
+  }
+  .game-question-image {
+    height: 150px;
+  }
+}
+
 /* Akademisyen kontrol merkezi, jokerler ve ders nabzı */
 .host-controlbar {
   display: flex !important;

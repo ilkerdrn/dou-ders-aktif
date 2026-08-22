@@ -8,7 +8,13 @@ type GameType =
   | "Kelime Bulutu"
   | "Takım Arenası"
   | "Hızlı Görev";
-type Question = { q: string; a: string[]; correct: number; seconds?: number };
+type Question = {
+  q: string;
+  a: string[];
+  correct: number;
+  seconds?: number;
+  image?: string;
+};
 type Activity = {
   id: number;
   type: GameType;
@@ -124,6 +130,7 @@ export default function Home() {
     [view, setView] = useState<View>("live"),
     [activities, setActivities] = useState(starters),
     [builder, setBuilder] = useState(false),
+    [editing, setEditing] = useState<Activity | null>(null),
     [playing, setPlaying] = useState<GameType | null>(null),
     [selected, setSelected] = useState(starters[0]),
     [code, setCode] = useState(""),
@@ -190,7 +197,13 @@ export default function Home() {
             >
               ♢<i>3</i>
             </button>
-            <button className="soft-button" onClick={() => setBuilder(true)}>
+            <button
+              className="soft-button"
+              onClick={() => {
+                setEditing(null);
+                setBuilder(true);
+              }}
+            >
               ＋ Etkinlik oluştur
             </button>
           </div>
@@ -207,10 +220,33 @@ export default function Home() {
         {view === "activities" && (
           <Library
             activities={activities}
-            create={() => setBuilder(true)}
+            create={() => {
+              setEditing(null);
+              setBuilder(true);
+            }}
             play={(a) => {
               setSelected(a);
               setPlaying(a.type);
+            }}
+            edit={(a) => {
+              setEditing(a);
+              setBuilder(true);
+            }}
+            duplicate={(a) => {
+              const copy = {
+                ...a,
+                id: Date.now(),
+                title: `${a.title} · Kopya`,
+                plays: 0,
+                content: a.content?.map((q) => ({ ...q, a: [...q.a] })),
+              };
+              setActivities((v) => [copy, ...v]);
+              notify("Etkinlik çoğaltıldı");
+            }}
+            remove={(a) => {
+              setActivities((v) => v.filter((x) => x.id !== a.id));
+              if (selected.id === a.id) setSelected(starters[0]);
+              notify("Etkinlik silindi");
             }}
           />
         )}
@@ -218,12 +254,16 @@ export default function Home() {
       </section>
       {builder && (
         <Builder
+          initial={editing}
           close={() => setBuilder(false)}
           save={(a) => {
-            setActivities((v) => [a, ...v]);
+            setActivities((v) =>
+              editing ? v.map((x) => (x.id === editing.id ? a : x)) : [a, ...v],
+            );
             setBuilder(false);
             setView("activities");
-            notify("Etkinlik kaydedildi!");
+            setEditing(null);
+            notify(editing ? "Etkinlik güncellendi!" : "Etkinlik kaydedildi!");
           }}
         />
       )}
@@ -396,16 +436,28 @@ function Library({
   activities,
   create,
   play,
+  edit,
+  duplicate,
+  remove,
 }: {
   activities: Activity[];
   create: () => void;
   play: (a: Activity) => void;
+  edit: (a: Activity) => void;
+  duplicate: (a: Activity) => void;
+  remove: (a: Activity) => void;
 }) {
   const [filter, setFilter] = useState("Tümü");
+  const [search, setSearch] = useState("");
   const visible =
     filter === "Tümü"
       ? activities
       : activities.filter((a) => a.type === filter);
+  const results = visible.filter((a) =>
+    a.title
+      .toLocaleLowerCase("tr-TR")
+      .includes(search.toLocaleLowerCase("tr-TR")),
+  );
   return (
     <>
       <div className="studio-banner">
@@ -440,9 +492,15 @@ function Library({
             </button>
           ),
         )}
+        <input
+          className="library-search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Etkinlik ara…"
+        />
       </div>
       <div className="library-grid">
-        {visible.map((a) => (
+        {results.map((a) => (
           <article className="library-card" key={a.id}>
             <div className="card-cover" style={{ background: a.accent }}>
               <span>{types.find((g) => g.type === a.type)?.icon}</span>
@@ -455,7 +513,11 @@ function Library({
               </p>
               <div>
                 <button onClick={() => play(a)}>▶ Oynat</button>
-                <button onClick={create}>Düzenle</button>
+                <button onClick={() => edit(a)}>Düzenle</button>
+                <button onClick={() => duplicate(a)}>⧉</button>
+                <button className="danger-action" onClick={() => remove(a)}>
+                  ⌫
+                </button>
               </div>
             </div>
           </article>
@@ -590,9 +652,11 @@ function Reports() {
 function Builder({
   close,
   save,
+  initial,
 }: {
   close: () => void;
   save: (a: Activity) => void;
+  initial?: Activity | null;
 }) {
   const blank = (): Question => ({
     q: "",
@@ -600,13 +664,15 @@ function Builder({
     correct: 0,
     seconds: 20,
   });
-  const [type, setType] = useState<GameType>("Quiz");
-  const [title, setTitle] = useState("");
-  const [questions, setQuestions] = useState<Question[]>([blank()]);
+  const [type, setType] = useState<GameType>(initial?.type || "Quiz");
+  const [title, setTitle] = useState(initial?.title || "");
+  const [questions, setQuestions] = useState<Question[]>(
+    initial?.content?.map((q) => ({ ...q, a: [...q.a] })) || [blank()],
+  );
   const [active, setActive] = useState(0);
   const [topic, setTopic] = useState("");
   const [difficulty, setDifficulty] = useState("Orta");
-  const [shuffle, setShuffle] = useState(true);
+  const [shuffle, setShuffle] = useState(initial?.shuffle ?? true);
   const [generatorOpen, setGeneratorOpen] = useState(false);
   const current = questions[active];
   const update = (next: Partial<Question>) =>
@@ -733,13 +799,24 @@ function Builder({
     setGeneratorOpen(false);
   };
   const makeTrueFalse = () => update({ a: ["Doğru", "Yanlış"], correct: 0 });
+  const addImage = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 2_000_000) {
+      alert("Görsel en fazla 2 MB olabilir.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => update({ image: String(reader.result) });
+    reader.readAsDataURL(file);
+  };
   const finish = () =>
     save({
-      id: Date.now(),
+      id: initial?.id || Date.now(),
       type,
       title: title.trim() || "Yeni Etkinlik",
       questions: questions.length,
-      plays: 0,
+      plays: initial?.plays || 0,
       accent: types.find((g) => g.type === type)?.color || "#d70926",
       content: questions.map((q, i) => ({
         ...q,
@@ -857,6 +934,27 @@ function Builder({
               onChange={(e) => update({ q: e.target.value })}
               placeholder="Sorunu veya görevini yaz…"
             />
+            <div className="question-media">
+              <label className="image-upload">
+                ▧ Görsel ekle
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => addImage(e.target.files?.[0])}
+                />
+              </label>
+              <span>JPG, PNG veya WEBP · en fazla 2 MB</span>
+              {current.image && (
+                <button onClick={() => update({ image: undefined })}>
+                  Görseli kaldır
+                </button>
+              )}
+            </div>
+            {current.image && (
+              <div className="question-image-preview">
+                <img src={current.image} alt="Soru görseli ön izlemesi" />
+              </div>
+            )}
             <div className="answer-editor colorful">
               {current.a.map((a, i) => (
                 <label
@@ -931,7 +1029,9 @@ function Arena({
   shuffle?: boolean;
   close: () => void;
 }) {
-  const code = "481209";
+  const [code] = useState(() =>
+    String(Math.floor(100000 + Math.random() * 900000)),
+  );
   const [phase, setPhase] = useState<GamePhase>("lobby");
   const [round, setRound] = useState(0);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -1119,6 +1219,11 @@ function Arena({
               </b>
             </div>
             <h3>{current.q}</h3>
+            {current.image && (
+              <div className="game-question-image">
+                <img src={current.image} alt="Soru görseli" />
+              </div>
+            )}
             <div>
               {current.a.map((a, i) => (
                 <button key={a} className={`game-option option-${i}`}>
@@ -1366,6 +1471,11 @@ function StudentStage({
             {timeLeft}
           </div>
           <h1>{question.q}</h1>
+          {question.image && (
+            <div className="student-question-image">
+              <img src={question.image} alt="Soru görseli" />
+            </div>
+          )}
           <div className="powerups">
             <button onClick={useFifty} disabled={fiftyUsed}>
               ◐ 50:50 {fiftyUsed ? "kullanıldı" : "jokeri"}

@@ -410,8 +410,7 @@ export default function Home() {
         intent === "instructor"
           ? "demo.akademisyen@dogus.edu.tr"
           : "demo.ogrenci@dogus.edu.tr",
-      fullName:
-        intent === "instructor" ? "Demo Akademisyen" : "Demo Öğrenci",
+      fullName: intent === "instructor" ? "Demo Akademisyen" : "Demo Öğrenci",
       role: intent,
     };
     setIdentity(demoIdentity);
@@ -3272,7 +3271,10 @@ function StudentStage({
       return 0;
     }
   });
-  const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
+  const [feedback, setFeedback] = useState<
+    "correct" | "wrong" | "neutral" | null
+  >(null);
+  const [revealedPoints, setRevealedPoints] = useState(0);
   const [timeLeft, setTimeLeft] = useState(20);
   const [fiftyUsed, setFiftyUsed] = useState(false);
   const [hiddenOptions, setHiddenOptions] = useState<number[]>([]);
@@ -3293,6 +3295,11 @@ function StudentStage({
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const hostSeenAtRef = useRef(0);
   const roomReadyRef = useRef(false);
+  const pendingResultRef = useRef<{
+    feedback: "correct" | "wrong" | "neutral";
+    points: number;
+    streak: number;
+  } | null>(null);
   const team: "Kırmızı" | "Siyah" =
     playerId.charCodeAt(0) % 2 === 0 ? "Kırmızı" : "Siyah";
 
@@ -3380,12 +3387,24 @@ function StudentStage({
           ),
         );
       if (payload.startedAt) startedAtRef.current = payload.startedAt;
-      setAnswer(null);
-      setFeedback(null);
-      setHiddenOptions([]);
-      setSelectedMany([]);
-      setOpenText("");
-      setInputError("");
+      if (payload.phase === "leaderboard" && pendingResultRef.current) {
+        const result = pendingResultRef.current;
+        setFeedback(result.feedback);
+        setRevealedPoints(result.points);
+        setStreak(result.streak);
+        if (result.points) setScore((value) => value + result.points);
+        pendingResultRef.current = null;
+      }
+      if (payload.phase === "question") {
+        pendingResultRef.current = null;
+        setAnswer(null);
+        setFeedback(null);
+        setRevealedPoints(0);
+        setHiddenOptions([]);
+        setSelectedMany([]);
+        setOpenText("");
+        setInputError("");
+      }
       if (payload.question?.kind === "ranking")
         setRankOrder(
           payload.question.a
@@ -3454,7 +3473,7 @@ function StudentStage({
   }, [phase, round]);
 
   const choose = (i: number, answerText?: string, forcedCorrect?: boolean) => {
-    if (answer !== null) return;
+    if (answer !== null || timeLeft <= 0) return;
     setAnswer(i);
     const correct =
       forcedCorrect ??
@@ -3469,9 +3488,12 @@ function StudentStage({
     const points = correct
       ? 600 + speedBonus + Math.min(nextStreak * 75, 375)
       : 0;
-    setStreak(nextStreak);
-    setFeedback(correct ? "correct" : "wrong");
-    if (correct) setScore((v) => v + points);
+    const isOpinion = gameType === "Anket" || gameType === "Kelime Bulutu";
+    pendingResultRef.current = {
+      feedback: isOpinion ? "neutral" : correct ? "correct" : "wrong",
+      points,
+      streak: nextStreak,
+    };
     channelRef.current?.send({
       type: "broadcast",
       event: "answer",
@@ -3778,13 +3800,9 @@ function StudentStage({
           {answer === null ? (
             <p>Yanıtını seç — ne kadar hızlıysan o kadar çok XP!</p>
           ) : (
-            <div className={`answer-feedback ${feedback}`}>
-              <b>{feedback === "correct" ? "✓ MUHTEŞEM!" : "× ÇOK YAKINDI!"}</b>
-              <span>
-                {feedback === "correct"
-                  ? `Serin ${streak} oldu, hız bonusu kazandın!`
-                  : "Doğru cevabı ekranda birlikte görelim."}
-              </span>
+            <div className="answer-feedback pending">
+              <b>✓ CEVABIN KİLİTLENDİ</b>
+              <span>Süre bitince doğru cevap açıklanacak.</span>
             </div>
           )}
           <div className="student-pulse">
@@ -3794,6 +3812,35 @@ function StudentStage({
             <button onClick={() => sendPulse("example")}>◈ Örnek</button>
             <button onClick={() => sendPulse("question")}>? Sorum var</button>
           </div>
+        </section>
+      ) : phase === "leaderboard" && feedback ? (
+        <section className={`student-result result-${feedback}`}>
+          <span className="result-icon">
+            {feedback === "correct" ? "✓" : feedback === "wrong" ? "×" : "◆"}
+          </span>
+          <small>SONUÇ AÇIKLANDI</small>
+          <h1>
+            {feedback === "correct"
+              ? "Doğru cevap!"
+              : feedback === "wrong"
+                ? "Bu tur olmadı"
+                : "Yanıtın kaydedildi"}
+          </h1>
+          {feedback === "wrong" && (
+            <p>
+              Doğru cevap: <b>{question.a[question.correct]}</b>
+            </p>
+          )}
+          {feedback === "correct" && (
+            <p>
+              Hız ve seri bonusuyla <b>+{revealedPoints} XP</b> kazandın.
+            </p>
+          )}
+          {feedback === "neutral" && (
+            <p>Sınıfın ortak sonucunu ana ekrandan takip et.</p>
+          )}
+          <strong>{score.toLocaleString("tr-TR")} XP</strong>
+          <span className="result-wait">Yeni soru hazırlanıyor…</span>
         </section>
       ) : (
         <section className="student-wait">

@@ -4284,6 +4284,66 @@ function Landing({
           </i>
         </div>
       </section>
+      <section className="classroom-showcase" aria-label="Canlı ders deneyimi">
+        <div className="showcase-copy">
+          <span className="showcase-kicker">
+            <i /> CANLI DERS DENEYİMİ
+          </span>
+          <h2>
+            Sınıfın enerjisini
+            <br />
+            <em>anında görün.</em>
+          </h2>
+          <p>
+            Yanıtlar, sınıf nabzı ve takım sıralaması aynı akışta buluşur.
+            Öğrenci yalnızca cevap vermez; ilerlemesini hisseder.
+          </p>
+          <div className="showcase-pills">
+            <span>⚡ Anlık geri bildirim</span>
+            <span>◎ Öğrenme çıktısı takibi</span>
+            <span>♛ Takım motivasyonu</span>
+          </div>
+        </div>
+        <div className="classroom-screen">
+          <div className="screen-topbar">
+            <span>
+              <i /> CANLI · BLP 276
+            </span>
+            <b>24 öğrenci</b>
+          </div>
+          <div className="screen-question">
+            <small>SORU 04 / 10 · 12 SANİYE</small>
+            <h3>Bir araştırma hipotezinin temel özelliği nedir?</h3>
+            <div className="screen-answers">
+              <span className="answer-a">
+                <b>▲</b> Test edilebilir olması <em>%68</em>
+              </span>
+              <span className="answer-b">
+                <b>◆</b> Uzun olması <em>%11</em>
+              </span>
+              <span className="answer-c">
+                <b>●</b> Kesin doğru olması <em>%14</em>
+              </span>
+              <span className="answer-d">
+                <b>■</b> Kaynak içermemesi <em>%7</em>
+              </span>
+            </div>
+          </div>
+          <div className="screen-footer">
+            <span>Yanıtlar canlı geliyor</span>
+            <i>
+              <em />
+              <em />
+              <em />
+              <em />
+              <em />
+            </i>
+          </div>
+          <div className="reaction-bubble reaction-one">🔥 +1 seri</div>
+          <div className="reaction-bubble reaction-two">✓ Anladım</div>
+          <div className="reaction-bubble reaction-three">✦ +920 XP</div>
+        </div>
+      </section>
       <section id="araclar" className="tools">
         <small>AKADEMİK ODAK, AKTİF KATILIM</small>
         <h2>

@@ -1699,6 +1699,265 @@ button {
   transform: rotate(1deg);
 }
 
+/* Gelişmiş etkinlik stüdyosu */
+.advanced-builder {
+  width: min(1120px, 97vw);
+  height: min(820px, 94vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.advanced-builder > header {
+  flex: 0 0 auto;
+}
+.advanced-builder .builder-top-actions button {
+  border: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 22px;
+}
+.builder-settings {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 14px;
+  padding: 14px 24px;
+  background: #fafaf8;
+  border-bottom: 1px solid var(--line);
+}
+.builder-settings label {
+  margin: 0;
+  font-size: 10px;
+}
+.builder-settings input,
+.builder-settings select,
+.canvas-tools select {
+  width: 100%;
+  margin-top: 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  padding: 10px;
+}
+.builder-workspace {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 245px 1fr;
+}
+.builder-workspace > aside {
+  background: #f3f3f0;
+  border-right: 1px solid var(--line);
+  padding: 15px;
+  overflow: auto;
+}
+.builder-workspace > aside > div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  margin-bottom: 12px;
+}
+.builder-workspace > aside > button {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  text-align: left;
+  margin-bottom: 7px;
+}
+.builder-workspace > aside > button.active {
+  background: #fff;
+  border-color: #d70926;
+  box-shadow: 0 5px 16px #0001;
+}
+.builder-workspace > aside > button > b {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  background: #ddd;
+  border-radius: 7px;
+}
+.builder-workspace > aside > button.active > b {
+  background: var(--red);
+  color: #fff;
+}
+.builder-workspace > aside > button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  padding: 0 8px;
+}
+.builder-workspace > aside > button > small {
+  font-size: 8px;
+  color: var(--muted);
+}
+.builder-workspace > aside > .add-question {
+  display: block;
+  text-align: center;
+  border: 1px dashed #bbb;
+  color: var(--red);
+  font-weight: 800;
+  margin-top: 12px;
+}
+.question-canvas {
+  padding: 22px 28px !important;
+  overflow: auto;
+}
+.canvas-tools {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 18px;
+}
+.canvas-tools > span {
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--red);
+  margin-right: auto;
+}
+.canvas-tools label {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 9px;
+}
+.canvas-tools select {
+  width: auto;
+  margin: 0;
+  padding: 7px;
+}
+.canvas-tools button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 9px;
+}
+.question-title-input {
+  width: 100%;
+  min-height: 95px !important;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  padding: 18px !important;
+  font: 800 21px/1.4 Manrope;
+  resize: vertical;
+}
+.answer-editor.colorful {
+  margin-top: 14px;
+}
+.answer-editor.colorful label {
+  position: relative;
+  border: 0;
+  border-radius: 12px;
+  padding: 5px;
+  color: #fff;
+}
+.answer-editor.colorful label.option-0 {
+  background: #e21b3c;
+}
+.answer-editor.colorful label.option-1 {
+  background: #1368ce;
+}
+.answer-editor.colorful label.option-2 {
+  background: #d89e00;
+}
+.answer-editor.colorful label.option-3 {
+  background: #26890c;
+}
+.answer-editor.colorful label > button {
+  background: #ffffff25 !important;
+  color: #fff;
+  width: 46px;
+}
+.answer-editor.colorful label > input {
+  border: 0;
+  background: #ffffffec;
+}
+.answer-editor.colorful label > i {
+  position: absolute;
+  right: 12px;
+  top: 11px;
+  font-size: 8px;
+  font-style: normal;
+  background: #111;
+  color: #fff;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+.advanced-builder > footer > span {
+  font-size: 10px;
+  color: var(--muted);
+}
+.timer-danger,
+.student-countdown.danger {
+  color: #fff !important;
+  background: var(--red) !important;
+  animation: urgent 0.6s infinite alternate;
+}
+.student-countdown {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  margin: -56px auto 12px;
+  background: #111;
+  color: #fff;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  position: relative;
+  font-weight: 900;
+  box-shadow: 0 5px 16px #0003;
+}
+@keyframes urgent {
+  to {
+    transform: scale(1.1);
+    box-shadow: 0 0 22px #d7092688;
+  }
+}
+@media (max-width: 700px) {
+  .advanced-builder {
+    height: 96vh;
+  }
+  .builder-settings {
+    grid-template-columns: 1fr;
+  }
+  .builder-workspace {
+    grid-template-columns: 1fr;
+  }
+  .builder-workspace > aside {
+    display: flex;
+    gap: 7px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    max-height: 92px;
+  }
+  .builder-workspace > aside > div {
+    display: none;
+  }
+  .builder-workspace > aside > button {
+    min-width: 140px;
+  }
+  .question-canvas {
+    padding: 15px !important;
+  }
+  .canvas-tools {
+    flex-wrap: wrap;
+  }
+  .answer-editor.colorful {
+    grid-template-columns: 1fr;
+  }
+  .advanced-builder > footer > span {
+    display: none;
+  }
+}
+
 /* Gerçek zamanlı oyun akışı */
 .realtime-arena {
   min-height: 610px;

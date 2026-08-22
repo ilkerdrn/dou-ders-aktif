@@ -464,6 +464,17 @@ function Library({
 }
 function Reports() {
   const weeks = [42, 58, 51, 76, 68, 91, 84];
+  const downloadReport = () => {
+    const csv =
+      "Etkinlik,Katılım,Doğruluk,Memnuniyet\nAraştırma Yöntemleri,124,%82,4.8/5\nSürdürülebilir Kampüs,98,%74,4.6/5\nDers Sonu Nabız,89,%91,4.7/5";
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(
+      new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }),
+    );
+    link.download = "dou-dersaktif-raporu.csv";
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
   return (
     <>
       <div className="metric-grid">
@@ -540,9 +551,7 @@ function Reports() {
             <small>İÇERİK PERFORMANSI</small>
             <h3>Son etkinlikler</h3>
           </div>
-          <button onClick={() => alert("Demo raporu indirilmeye hazırlandı.")}>
-            Raporu indir ↓
-          </button>
+          <button onClick={downloadReport}>Raporu indir ↓</button>
         </div>
         <div className="table">
           <div className="thead">
@@ -583,132 +592,172 @@ function Builder({
   close: () => void;
   save: (a: Activity) => void;
 }) {
-  const [step, setStep] = useState(1),
-    [type, setType] = useState<GameType>("Quiz"),
-    [title, setTitle] = useState(""),
-    [question, setQuestion] = useState(""),
-    [answers, setAnswers] = useState(["", "", "", ""]),
-    [correct, setCorrect] = useState(0);
+  const blank = (): Question => ({
+    q: "",
+    a: ["", "", "", ""],
+    correct: 0,
+    seconds: 20,
+  });
+  const [type, setType] = useState<GameType>("Quiz");
+  const [title, setTitle] = useState("");
+  const [questions, setQuestions] = useState<Question[]>([blank()]);
+  const [active, setActive] = useState(0);
+  const current = questions[active];
+  const update = (next: Partial<Question>) =>
+    setQuestions((all) =>
+      all.map((q, i) => (i === active ? { ...q, ...next } : q)),
+    );
+  const add = () => {
+    setQuestions((all) => [...all, blank()]);
+    setActive(questions.length);
+  };
+  const duplicate = () => {
+    setQuestions((all) => [...all, { ...current, a: [...current.a] }]);
+    setActive(questions.length);
+  };
+  const remove = () => {
+    if (questions.length === 1) return;
+    setQuestions((all) => all.filter((_, i) => i !== active));
+    setActive(Math.max(0, active - 1));
+  };
   const finish = () =>
     save({
       id: Date.now(),
       type,
-      title: title || "Yeni Etkinlik",
-      questions: 1,
+      title: title.trim() || "Yeni Etkinlik",
+      questions: questions.length,
       plays: 0,
       accent: types.find((g) => g.type === type)?.color || "#d70926",
+      content: questions.map((q, i) => ({
+        ...q,
+        q: q.q.trim() || `${i + 1}. soru`,
+        a: q.a.map((a, j) => a.trim() || `${j + 1}. seçenek`),
+      })),
     });
+
   return (
     <div className="modal">
-      <div className="builder">
+      <div className="builder advanced-builder">
         <header>
           <div>
-            <span className="overline">ETKİNLİK STÜDYOSU</span>
-            <h2>Yeni etkinlik oluştur</h2>
+            <span className="overline">ETKİNLİK STÜDYOSU · OTOMATİK KAYIT</span>
+            <h2>Etkinliği tasarla</h2>
           </div>
-          <button onClick={close}>×</button>
+          <div className="builder-top-actions">
+            <button onClick={close}>×</button>
+          </div>
         </header>
-        <div className="steps-line">
-          <i className="done">1</i>
-          <span />
-          <i className={step >= 2 ? "done" : ""}>2</i>
-          <span />
-          <i className={step >= 3 ? "done" : ""}>3</i>
-        </div>
-        {step === 1 && (
-          <section>
-            <h3>Bir oyun biçimi seç</h3>
-            <div className="type-grid">
+        <div className="builder-settings">
+          <label>
+            Etkinlik adı
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Örn. Python Döngüleri"
+            />
+          </label>
+          <label>
+            Oyun modu
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as GameType)}
+            >
               {types.map((g) => (
-                <button
-                  key={g.type}
-                  className={type === g.type ? "active" : ""}
-                  onClick={() => setType(g.type)}
-                  style={{ "--accent": g.color } as React.CSSProperties}
+                <option key={g.type}>{g.type}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="builder-workspace">
+          <aside>
+            <div>
+              <b>SORULAR</b>
+              <span>{questions.length}</span>
+            </div>
+            {questions.map((q, i) => (
+              <button
+                key={i}
+                className={active === i ? "active" : ""}
+                onClick={() => setActive(i)}
+              >
+                <b>{i + 1}</b>
+                <span>{q.q || "Yeni soru"}</span>
+                <small>{q.seconds || 20} sn</small>
+              </button>
+            ))}
+            <button className="add-question" onClick={add}>
+              ＋ Soru ekle
+            </button>
+          </aside>
+          <section className="question-canvas">
+            <div className="canvas-tools">
+              <span>SORU {active + 1}</span>
+              <label>
+                Süre
+                <select
+                  value={current.seconds || 20}
+                  onChange={(e) => update({ seconds: Number(e.target.value) })}
                 >
-                  <i>{g.icon}</i>
-                  <b>{g.type}</b>
-                  <small>{g.desc}</small>
-                </button>
+                  {[10, 20, 30, 45, 60, 90].map((n) => (
+                    <option key={n} value={n}>
+                      {n} saniye
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button onClick={duplicate}>⧉ Çoğalt</button>
+              <button onClick={remove}>⌫ Sil</button>
+            </div>
+            <textarea
+              className="question-title-input"
+              value={current.q}
+              onChange={(e) => update({ q: e.target.value })}
+              placeholder="Sorunu veya görevini yaz…"
+            />
+            <div className="answer-editor colorful">
+              {current.a.map((a, i) => (
+                <label
+                  key={i}
+                  className={`option-${i} ${current.correct === i ? "correct" : ""}`}
+                >
+                  <button onClick={() => update({ correct: i })}>
+                    {optionMarks[i]}
+                  </button>
+                  <input
+                    value={a}
+                    onChange={(e) =>
+                      update({
+                        a: current.a.map((x, j) =>
+                          j === i ? e.target.value : x,
+                        ),
+                      })
+                    }
+                    placeholder={`${i + 1}. cevap seçeneği`}
+                  />
+                  <i>{current.correct === i ? "✓ DOĞRU" : ""}</i>
+                </label>
               ))}
             </div>
-            <label>
-              Etkinlik adı
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Örn. Araştırma Yöntemleri Finali"
-              />
-            </label>
-          </section>
-        )}
-        {step === 2 && (
-          <section>
-            <h3>İlk içeriğini ekle</h3>
-            <label>
-              Soru veya görev
-              <textarea
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Sorunu buraya yaz..."
-              />
-            </label>
-            {type === "Quiz" && (
-              <div className="answer-editor">
-                {answers.map((a, i) => (
-                  <label key={i} className={correct === i ? "correct" : ""}>
-                    <button onClick={() => setCorrect(i)}>
-                      {String.fromCharCode(65 + i)}
-                    </button>
-                    <input
-                      value={a}
-                      onChange={(e) =>
-                        setAnswers((v) =>
-                          v.map((x, j) => (j === i ? e.target.value : x)),
-                        )
-                      }
-                      placeholder={`${i + 1}. seçenek`}
-                    />
-                  </label>
-                ))}
-              </div>
-            )}
             <div className="builder-hint">
-              💡 Doğru seçeneğin harfine tıkla. Sonucu sınıfça tartış.
+              💡 Doğru şıkkı seç, süreyi ayarla ve soldan yeni sorular ekle.
+              Sorular cihazda otomatik saklanır.
             </div>
           </section>
-        )}
-        {step === 3 && (
-          <section className="publish-step">
-            <span>✓</span>
-            <h3>Etkinliğin hazır!</h3>
-            <p>
-              <b>{title || "Yeni Etkinlik"}</b>, {type} formatında kaydedilecek.
-            </p>
-            <div>
-              <small>FORMAT</small>
-              <b>{type}</b>
-              <small>İÇERİK</small>
-              <b>1 soru</b>
-            </div>
-          </section>
-        )}
+        </div>
         <footer>
-          <button
-            className="outline"
-            onClick={step === 1 ? close : () => setStep((v) => v - 1)}
-          >
-            ← {step === 1 ? "Vazgeç" : "Geri"}
+          <button className="outline" onClick={close}>
+            ← Vazgeç
           </button>
-          {step < 3 ? (
-            <button className="primary" onClick={() => setStep((v) => v + 1)}>
-              Devam et →
-            </button>
-          ) : (
-            <button className="primary" onClick={finish}>
-              Kaydet ve bitir ✓
-            </button>
-          )}
+          <span>
+            {questions.length} soru · yaklaşık{" "}
+            {Math.ceil(
+              questions.reduce((s, q) => s + (q.seconds || 20), 0) / 60,
+            )}{" "}
+            dakika
+          </span>
+          <button className="primary" onClick={finish}>
+            Kaydet ve kütüphaneye ekle ✓
+          </button>
         </footer>
       </div>
     </div>
@@ -735,6 +784,7 @@ function Arena({
   const [players, setPlayers] = useState<Player[]>([]);
   const [answers, setAnswers] = useState(0);
   const [answerStats, setAnswerStats] = useState([0, 0, 0, 0]);
+  const [timeLeft, setTimeLeft] = useState(20);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const current = questions[round % questions.length];
 
@@ -787,6 +837,7 @@ function Arena({
     setRound(nextRound);
     setAnswers(0);
     setAnswerStats([0, 0, 0, 0]);
+    setTimeLeft(questions[nextRound % questions.length].seconds || 20);
     channelRef.current?.send({
       type: "broadcast",
       event: "game-state",
@@ -800,6 +851,20 @@ function Arena({
       },
     });
   };
+  useEffect(() => {
+    if (phase !== "question") return;
+    const timer = window.setInterval(() => {
+      setTimeLeft((value) => {
+        if (value <= 1) {
+          window.clearInterval(timer);
+          window.setTimeout(() => broadcast("leaderboard"), 0);
+          return 0;
+        }
+        return value - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [phase, round]);
   const sorted = [...players].sort((a, b) => b.score - a.score);
 
   return (
@@ -844,15 +909,14 @@ function Arena({
               <span>
                 SORU {round + 1} / {questions.length}
               </span>
-              <b>{answers} yanıt</b>
+              <b className={timeLeft <= 5 ? "timer-danger" : ""}>
+                ⏱ {timeLeft} sn · {answers} yanıt
+              </b>
             </div>
             <h3>{current.q}</h3>
             <div>
               {current.a.map((a, i) => (
-                <button
-                  key={a}
-                  className={`game-option option-${i} ${i === current.correct ? "host-correct" : ""}`}
-                >
+                <button key={a} className={`game-option option-${i}`}>
                   <b>{optionMarks[i]}</b>
                   <span>{a}</span>
                   <small>
@@ -948,6 +1012,7 @@ function StudentStage({
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
   const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
+  const [timeLeft, setTimeLeft] = useState(20);
   const startedAtRef = useRef(Date.now());
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -960,6 +1025,7 @@ function StudentStage({
       setPhase(payload.phase);
       setRound(payload.round);
       if (payload.question) setQuestion(payload.question);
+      if (payload.question) setTimeLeft(payload.question.seconds || 20);
       if (payload.startedAt) startedAtRef.current = payload.startedAt;
       setAnswer(null);
       setFeedback(null);
@@ -978,6 +1044,15 @@ function StudentStage({
       supabase.removeChannel(channel);
     };
   }, [cleanCode, name]);
+
+  useEffect(() => {
+    if (phase !== "question") return;
+    const timer = window.setInterval(
+      () => setTimeLeft((value) => Math.max(0, value - 1)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [phase, round]);
 
   const choose = (i: number) => {
     if (answer !== null) return;
@@ -1034,7 +1109,14 @@ function StudentStage({
             <span>SORU {round + 1}</span>
           </div>
           <div className="timer">
-            <i />
+            <i
+              style={{
+                width: `${Math.max(0, (timeLeft / (question.seconds || 20)) * 100)}%`,
+              }}
+            />
+          </div>
+          <div className={`student-countdown ${timeLeft <= 5 ? "danger" : ""}`}>
+            {timeLeft}
           </div>
           <h1>{question.q}</h1>
           <div className="student-answers">

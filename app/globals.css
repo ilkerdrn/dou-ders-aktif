@@ -4728,3 +4728,235 @@ button {
     0 28px 75px #00000024,
     0 0 55px #ffffff85;
 }
+
+/* V8 · güvenli, oyun hissi veren öğrenci katılımı */
+.old-home .join-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.old-home .join-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e9d9dc;
+  border-radius: 999px;
+  background: #fff6f7;
+  color: #861124;
+  padding: 6px 9px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.old-home .join-live i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 0 5px #d7092618;
+  animation: pulseLive 1.5s ease-in-out infinite;
+}
+@keyframes pulseLive {
+  50% {
+    box-shadow: 0 0 0 8px #d7092600;
+  }
+}
+.old-home .join-steps {
+  display: grid;
+  grid-template-columns: 22px auto 1fr 22px auto 1fr 22px auto;
+  align-items: center;
+  gap: 6px;
+  margin: 18px 0 4px;
+  color: #89828c;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.old-home .join-steps b {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  font-size: 10px;
+}
+.old-home .join-steps b:first-child {
+  background: var(--red);
+}
+.old-home .join-steps i {
+  height: 1px;
+  min-width: 8px;
+  background: #ddd7dc;
+}
+.old-home .join-field {
+  margin-top: 16px;
+}
+.old-home .join-field label {
+  margin: 0 0 7px;
+}
+.old-home .join-card input {
+  min-height: 52px;
+  font-size: 16px;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.2s;
+}
+.old-home .join-card input:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 4px #d7092613;
+  transform: translateY(-1px);
+}
+.old-home .session-code-input {
+  font:
+    850 22px/1 Manrope,
+    sans-serif;
+  letter-spacing: 7px;
+  color: var(--ink);
+}
+.old-home .participant-name-input.invalid {
+  border-color: #d70926;
+  background: #fff8f8;
+}
+.old-home .name-rule {
+  display: block;
+  min-height: 15px;
+  margin: 6px 2px 0;
+  color: #77717a;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.old-home .name-rule.invalid {
+  color: #ae0b23;
+}
+.old-home .name-rule.valid {
+  color: #087a63;
+}
+.old-home .join-card > button {
+  position: relative;
+  overflow: hidden;
+  min-height: 54px;
+  transition:
+    transform 0.18s,
+    box-shadow 0.18s;
+}
+.old-home .join-card > button:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 9px 0 #8d071b,
+    0 18px 30px #d7092628;
+}
+.old-home .join-card > button:active {
+  transform: translateY(5px);
+  box-shadow: 0 2px 0 #8d071b;
+}
+.old-home .join-card > .safe-name-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.old-home .safe-name-note span {
+  color: var(--red);
+}
+
+@media (max-width: 700px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+  .old-home .hero {
+    gap: 38px;
+    padding-bottom: 54px;
+  }
+  .old-home .hero-stage {
+    min-height: auto;
+    width: 100%;
+  }
+  .old-home .hero-orbit,
+  .old-home .floating-proof,
+  .old-home .mini-leader {
+    display: none;
+  }
+  .old-home .join-card {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    max-width: none;
+    transform: none;
+    box-shadow:
+      8px 8px 0 #1d1d1be6,
+      0 20px 50px #0000001c;
+  }
+  .old-home .live-proof-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+  .old-home .pulse-demo {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 560px) {
+  .old-home .topbar {
+    min-height: 68px;
+    gap: 10px;
+  }
+  .old-home .topbar .ghost {
+    padding: 10px 11px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .old-home .hero {
+    margin-top: 18px;
+  }
+  .old-home .hero h1 {
+    font-size: clamp(38px, 12vw, 48px);
+    line-height: 0.98;
+    letter-spacing: -2.7px;
+  }
+  .old-home .hero-copy > p {
+    font-size: 15px;
+    line-height: 1.65;
+  }
+  .old-home .hero-actions .primary {
+    width: 100%;
+  }
+  .old-home .join-card {
+    padding: 23px 20px 25px;
+    border-radius: 22px;
+  }
+  .old-home .join-card h2 {
+    font-size: 28px;
+  }
+  .old-home .join-steps {
+    grid-template-columns: 22px auto 1fr 22px auto;
+  }
+  .old-home .join-steps i:nth-of-type(2),
+  .old-home .join-steps b:nth-of-type(3),
+  .old-home .join-steps span:nth-of-type(3) {
+    display: none;
+  }
+  .old-home .session-code-input {
+    letter-spacing: 5px;
+  }
+  .old-home .ticker {
+    transform: rotate(-0.5deg) scale(1.01);
+  }
+  .old-home .live-proof-strip {
+    padding-inline: 18px;
+  }
+  .old-home .steps {
+    padding: 35px 26px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .old-home .join-live i {
+    animation: none;
+  }
+  .old-home .join-card > button,
+  .old-home .join-card input {
+    transition: none;
+  }
+}

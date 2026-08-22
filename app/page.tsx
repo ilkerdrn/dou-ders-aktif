@@ -129,6 +129,67 @@ const types: { type: GameType; icon: string; desc: string; color: string }[] = [
     color: "#ec4899",
   },
 ];
+const validateParticipantName = (value: string) => {
+  const clean = value.trim().replace(/\s+/g, " ");
+  if (!clean) return "Görünen adını yazmalısın.";
+  if (clean.length < 2) return "Görünen ad en az 2 karakter olmalı.";
+  if (clean.length > 24) return "Görünen ad en fazla 24 karakter olabilir.";
+  if (!/^[a-zA-ZçÇğĞıİöÖşŞüÜ0-9._ -]+$/.test(clean))
+    return "Yalnızca harf, rakam, boşluk, nokta, tire ve alt çizgi kullan.";
+  if ((clean.match(/[a-zA-ZçÇğĞıİöÖşŞüÜ]/g) || []).length < 2)
+    return "Görünen ad en az iki harf içermeli.";
+  if (/(.)\1{3,}/i.test(clean)) return "Aynı karakteri art arda kullanma.";
+  const normalized = clean
+    .toLocaleLowerCase("tr-TR")
+    .replace(/[._ -]/g, "")
+    .replace(/0/g, "o")
+    .replace(/1/g, "i")
+    .replace(/3/g, "e")
+    .replace(/4/g, "a")
+    .replace(/5/g, "s")
+    .replace(/7/g, "t");
+  const blocked = [
+    "amk",
+    "aq",
+    "orospu",
+    "siktir",
+    "sik",
+    "yarrak",
+    "yarak",
+    "amcik",
+    "amcık",
+    "got",
+    "göt",
+    "meme",
+    "porno",
+    "porn",
+    "seks",
+    "sex",
+    "nude",
+    "escort",
+    "ibne",
+    "pic",
+    "piç",
+    "kahpe",
+    "gerizekali",
+    "gerizekalı",
+    "salak",
+    "aptal",
+  ];
+  if (blocked.some((word) => normalized.includes(word)))
+    return "Bu görünen ad sınıf güvenliği filtresine takıldı.";
+  const reserved = [
+    "admin",
+    "yonetici",
+    "yönetici",
+    "moderator",
+    "moderatör",
+    "sistem",
+  ];
+  if (reserved.includes(normalized))
+    return "Bu ad sistem rolleri için ayrılmıştır.";
+  return "";
+};
 const quiz = [
   {
     q: "Bir araştırma hipotezinin temel özelliği nedir?",
@@ -255,25 +316,19 @@ export default function Home() {
         name={studentName}
         setName={setStudentName}
         teacher={() => setMode("teacher")}
-        join={async () => {
+        join={() => {
           const clean = code.replace(/\s/g, "");
-          if (clean.length < 5) {
+          if (!/^\d{5,6}$/.test(clean)) {
             notify("5 veya 6 haneli oturum kodunu gir");
             return;
           }
-          if (clean === "481209") {
-            setMode("student");
+          const nameError = validateParticipantName(studentName);
+          if (nameError) {
+            notify(nameError);
             return;
           }
-          const { data } = await supabase
-            .from("dou_sessions")
-            .select("id,status")
-            .eq("join_code", clean)
-            .in("status", ["lobby", "question", "leaderboard"])
-            .maybeSingle();
-          data
-            ? setMode("student")
-            : notify("Bu kodla açık bir oturum bulunamadı");
+          setStudentName(studentName.trim().replace(/\s+/g, " "));
+          setMode("student");
         }}
         toast={toast}
       />
@@ -2538,6 +2593,7 @@ function Arena({
       setPlayers((old) =>
         live.map((p) => ({
           ...p,
+          name: validateParticipantName(p.name) ? "Katılımcı" : p.name,
           score: old.find((x) => x.id === p.id)?.score || 0,
         })),
       );
@@ -2996,9 +3052,12 @@ function StudentStage({
     channel.subscribe((s) => {
       if (s === "SUBSCRIBED") {
         setStatus("Canlı odaya bağlandın");
+        const safeName = validateParticipantName(name)
+          ? "Katılımcı"
+          : name.trim().replace(/\s+/g, " ");
         channel.track({
           id: idRef.current,
-          name: name || "Misafir öğrenci",
+          name: safeName,
           score,
           team,
         });
@@ -3382,6 +3441,10 @@ function Landing({
   join: () => void;
   toast: string;
 }) {
+  const nameError = name ? validateParticipantName(name) : "";
+  const submitOnEnter = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") join();
+  };
   return (
     <main className="landing old-home">
       <nav className="topbar">
@@ -3437,26 +3500,72 @@ function Landing({
               <br />
               <b>ETKİLEŞİM AĞI</b>
             </div>
-            <span className="join-label">ÖĞRENCİ KATILIMI</span>
+            <div className="join-head">
+              <span className="join-label">ÖĞRENCİ KATILIMI</span>
+              <span className="join-live">
+                <i /> CANLI
+              </span>
+            </div>
             <h2>Derse bağlan</h2>
             <p>Tahtadaki altı haneli oturum kodunu gir.</p>
-            <label>Oturum kodu</label>
-            <input
-              value={code}
-              onChange={(e) =>
-                setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-              }
-              placeholder="000 000"
-              inputMode="numeric"
-            />
-            <label>Görünen ad</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ad Soyad"
-            />
+            <div className="join-steps" aria-hidden="true">
+              <b>1</b>
+              <span>Kodu gir</span>
+              <i />
+              <b>2</b>
+              <span>Adını yaz</span>
+              <i />
+              <b>3</b>
+              <span>Oyundasın</span>
+            </div>
+            <div className="join-field">
+              <label htmlFor="session-code">Oturum kodu</label>
+              <input
+                id="session-code"
+                className="session-code-input"
+                value={code}
+                onChange={(e) =>
+                  setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+                onKeyDown={submitOnEnter}
+                placeholder="000 000"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                aria-label="5 veya 6 haneli oturum kodu"
+              />
+            </div>
+            <div className="join-field">
+              <label htmlFor="participant-name">Görünen ad</label>
+              <input
+                id="participant-name"
+                className={
+                  nameError
+                    ? "participant-name-input invalid"
+                    : "participant-name-input"
+                }
+                value={name}
+                onChange={(e) => setName(e.target.value.slice(0, 24))}
+                onKeyDown={submitOnEnter}
+                placeholder="Ad Soyad"
+                maxLength={24}
+                autoComplete="name"
+                aria-describedby="name-safety-rule"
+                aria-invalid={Boolean(nameError)}
+              />
+              <small
+                id="name-safety-rule"
+                className={`name-rule ${nameError ? "invalid" : name ? "valid" : ""}`}
+              >
+                {nameError ||
+                  (name
+                    ? "✓ Görünen ad uygun"
+                    : "Küfür, argo ve uygunsuz adlar engellenir")}
+              </small>
+            </div>
             <button onClick={join}>Oturuma katıl →</button>
-            <small>Öğrenci hesabı gerektirmez</small>
+            <small className="safe-name-note">
+              <span>◆</span> Hesap gerekmez · Güvenli ad filtresi aktif
+            </small>
           </div>
           <div className="mini-leader">
             <span>1</span>

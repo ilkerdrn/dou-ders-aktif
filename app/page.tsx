@@ -135,7 +135,9 @@ export default function Home() {
     [selected, setSelected] = useState(starters[0]),
     [code, setCode] = useState(""),
     [studentName, setStudentName] = useState(""),
-    [toast, setToast] = useState("");
+    [toast, setToast] = useState(""),
+    [notificationsOpen, setNotificationsOpen] = useState(false),
+    [unread, setUnread] = useState(3);
   useEffect(() => {
     try {
       const saved = localStorage.getItem("dou-activities");
@@ -193,9 +195,10 @@ export default function Home() {
           <div className="head-actions">
             <button
               className="icon-button"
-              onClick={() => notify("Bildirimlerin güncel")}
+              aria-label="Bildirimleri aç"
+              onClick={() => setNotificationsOpen((v) => !v)}
             >
-              ♢<i>3</i>
+              🔔{unread > 0 && <i>{unread}</i>}
             </button>
             <button
               className="soft-button"
@@ -206,6 +209,56 @@ export default function Home() {
             >
               ＋ Etkinlik oluştur
             </button>
+            {notificationsOpen && (
+              <div className="notification-center">
+                <header>
+                  <div>
+                    <b>Bildirimler</b>
+                    <small>{unread} okunmamış</small>
+                  </div>
+                  <button onClick={() => setNotificationsOpen(false)}>×</button>
+                </header>
+                <button className="notification-item">
+                  <i className="n-live">●</i>
+                  <span>
+                    <b>Canlı oturum hazır</b>
+                    <small>481 209 kodlu deneme sınıfı başlatılabilir.</small>
+                    <em>Şimdi</em>
+                  </span>
+                </button>
+                <button className="notification-item">
+                  <i>◆</i>
+                  <span>
+                    <b>Yeni rapor oluştu</b>
+                    <small>
+                      Araştırma Yöntemleri etkinlik sonuçları hazır.
+                    </small>
+                    <em>12 dk önce</em>
+                  </span>
+                </button>
+                <button className="notification-item">
+                  <i>✦</i>
+                  <span>
+                    <b>Katılım yükseldi</b>
+                    <small>Bu hafta sınıf katılımı %18 arttı.</small>
+                    <em>Bugün</em>
+                  </span>
+                </button>
+                <footer>
+                  <button onClick={() => setUnread(0)}>
+                    ✓ Tümünü okundu işaretle
+                  </button>
+                  <button
+                    onClick={() => {
+                      setView("reports");
+                      setNotificationsOpen(false);
+                    }}
+                  >
+                    Raporlara git →
+                  </button>
+                </footer>
+              </div>
+            )}
           </div>
         </header>
         {view === "live" && (

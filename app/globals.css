@@ -1699,6 +1699,125 @@ button {
   transform: rotate(1deg);
 }
 
+/* Çalışan bildirim merkezi */
+.head-actions {
+  position: relative;
+}
+.notification-center {
+  position: absolute;
+  z-index: 30;
+  right: 0;
+  top: 55px;
+  width: 360px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px #0003;
+  overflow: hidden;
+  text-align: left;
+}
+.notification-center > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 17px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.notification-center > header > div {
+  display: flex;
+  flex-direction: column;
+}
+.notification-center > header small {
+  color: var(--red);
+  font-size: 9px;
+  margin-top: 3px;
+}
+.notification-center > header button {
+  border: 0;
+  background: #eee;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 17px;
+}
+.notification-item {
+  width: 100%;
+  display: flex !important;
+  gap: 11px;
+  border: 0 !important;
+  border-bottom: 1px solid #eee !important;
+  background: #fff !important;
+  padding: 14px 17px !important;
+  text-align: left !important;
+  border-radius: 0 !important;
+}
+.notification-item:hover {
+  background: #faf7f7 !important;
+}
+.notification-item > i {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: #f5e6e9;
+  color: var(--red);
+  font-style: normal;
+}
+.notification-item > i.n-live {
+  background: #e2f6ef;
+  color: var(--green);
+}
+.notification-item > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.notification-item b {
+  font-size: 11px;
+}
+.notification-item small {
+  font-size: 9px;
+  color: var(--muted);
+  margin: 3px 0;
+  line-height: 1.4;
+}
+.notification-item em {
+  font-size: 8px;
+  color: #aaa;
+  font-style: normal;
+}
+.notification-center > footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  background: #f5f5f2;
+}
+.notification-center > footer button {
+  border: 0;
+  background: transparent;
+  color: var(--red);
+  font-size: 9px;
+  font-weight: 800;
+}
+.icon-button {
+  font-size: 14px !important;
+}
+@media (max-width: 600px) {
+  .notification-center {
+    position: fixed;
+    left: 14px;
+    right: 14px;
+    top: 80px;
+    width: auto;
+  }
+  .notification-center > footer {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+}
+
 /* V2 medya soruları ve kütüphane yönetimi */
 .library-search {
   margin-left: auto;

@@ -3785,7 +3785,7 @@ function MicrosoftAuthDialog({
       provider: "azure",
       options: {
         scopes: "openid profile email",
-        redirectTo: window.location.origin,
+        redirectTo: `${window.location.origin}${window.location.pathname}`,
         queryParams: { prompt: "select_account" },
       },
     });

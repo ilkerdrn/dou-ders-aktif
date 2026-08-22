@@ -37,9 +37,11 @@ type Question = {
   outcome?: string;
   bloom?: string;
   points?: number;
+  pinX?: number;
+  pinY?: number;
 };
 type Activity = {
-  id: number;
+  id: number | string;
   type: GameType;
   title: string;
   questions: number;
@@ -172,6 +174,36 @@ export default function Home() {
       const saved = localStorage.getItem("dou-activities");
       if (saved) setActivities(JSON.parse(saved));
     } catch {}
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        if (!session?.user) return;
+        const { data } = await supabase
+          .from("dou_activities")
+          .select("id,title,game_type,content,outcome_map")
+          .eq("owner_id", session.user.id)
+          .order("updated_at", { ascending: false });
+        if (data?.length) {
+          const restored: Activity[] = data.map((a, i) => ({
+            id: a.id,
+            title: a.title,
+            type: a.game_type as GameType,
+            content: Array.isArray(a.content) ? (a.content as Question[]) : [],
+            questions: Array.isArray(a.content) ? a.content.length : 0,
+            plays: 0,
+            accent:
+              types.find((t) => t.type === a.game_type)?.color ||
+              ["#d70926", "#6c4df6", "#159a80"][i % 3],
+            shuffle: Boolean(
+              (a.outcome_map as { shuffle?: boolean } | null)?.shuffle,
+            ),
+          }));
+          setActivities(restored);
+          setSelected(restored[0]);
+          notify(`${restored.length} bulut etkinliği geri yüklendi`);
+        }
+      },
+    );
+    return () => listener.subscription.unsubscribe();
   }, []);
   useEffect(() => {
     try {
@@ -687,6 +719,37 @@ function Library({
 }
 function Reports() {
   const weeks = [42, 58, 51, 76, 68, 91, 84];
+  const [cloudStats, setCloudStats] = useState<{
+    answers: number;
+    accuracy: number;
+    xp: number;
+  } | null>(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const { data: sessions } = await supabase
+        .from("dou_sessions")
+        .select("id")
+        .eq("owner_id", data.user.id);
+      if (!sessions?.length) return;
+      const { data: responses } = await supabase
+        .from("dou_responses")
+        .select("is_correct,points")
+        .in(
+          "session_id",
+          sessions.map((s) => s.id),
+        );
+      if (responses?.length)
+        setCloudStats({
+          answers: responses.length,
+          accuracy: Math.round(
+            (responses.filter((r) => r.is_correct).length / responses.length) *
+              100,
+          ),
+          xp: responses.reduce((s, r) => s + (r.points || 0), 0),
+        });
+    });
+  }, []);
   const downloadReport = () => {
     const csv =
       "Etkinlik,Katılım,Doğruluk,Memnuniyet\nAraştırma Yöntemleri,124,%82,4.8/5\nSürdürülebilir Kampüs,98,%74,4.6/5\nDers Sonu Nabız,89,%91,4.7/5";
@@ -702,8 +765,18 @@ function Reports() {
     <>
       <div className="metric-grid">
         {[
-          ["Toplam katılım", "1.284", "+18%", "↗"],
-          ["Ortalama doğruluk", "%76", "+6%", "◎"],
+          [
+            "Canlı yanıt",
+            cloudStats ? cloudStats.answers.toLocaleString("tr-TR") : "1.284",
+            cloudStats ? "Bulut verisi" : "+18%",
+            "↗",
+          ],
+          [
+            "Ortalama doğruluk",
+            cloudStats ? `%${cloudStats.accuracy}` : "%76",
+            cloudStats ? `${cloudStats.xp.toLocaleString("tr-TR")} XP` : "+6%",
+            "◎",
+          ],
           ["Tamamlanan etkinlik", "48", "+12", "◆"],
           ["Aktif öğrenci", "186", "+24", "●"],
         ].map((m, i) => (
@@ -2014,8 +2087,29 @@ function Builder({
               )}
             </div>
             {current.image && (
-              <div className="question-image-preview">
+              <div
+                className={`question-image-preview ${current.kind === "pin" ? "pin-editor" : ""}`}
+                onClick={(e) => {
+                  if (current.kind !== "pin") return;
+                  const r = e.currentTarget.getBoundingClientRect();
+                  update({
+                    pinX: Math.round(((e.clientX - r.left) / r.width) * 100),
+                    pinY: Math.round(((e.clientY - r.top) / r.height) * 100),
+                  });
+                }}
+              >
                 <img src={current.image} alt="Soru görseli ön izlemesi" />
+                {current.kind === "pin" && (
+                  <i
+                    className="pin-target"
+                    style={{
+                      left: `${current.pinX ?? 50}%`,
+                      top: `${current.pinY ?? 50}%`,
+                    }}
+                  >
+                    ＋
+                  </i>
+                )}
               </div>
             )}
             <div className="answer-editor colorful">
@@ -2076,7 +2170,13 @@ function Builder({
   );
 }
 type GamePhase = "lobby" | "question" | "leaderboard" | "final";
-type Player = { id: string; name: string; score: number; streak?: number };
+type Player = {
+  id: string;
+  name: string;
+  score: number;
+  streak?: number;
+  team?: "Kırmızı" | "Siyah";
+};
 const optionMarks = ["▲", "◆", "●", "■"];
 
 function Arena({
@@ -2113,9 +2213,24 @@ function Arena({
     shuffle ? [...questions].sort(() => Math.random() - 0.5) : questions,
   );
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const dbSessionRef = useRef<string | null>(null);
   const current = gameQuestions[round % gameQuestions.length];
 
   useEffect(() => {
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const { data: session } = await supabase
+        .from("dou_sessions")
+        .insert({
+          owner_id: data.user.id,
+          join_code: code,
+          status: "lobby",
+          started_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      if (session) dbSessionRef.current = session.id;
+    });
     const channel = supabase.channel(roomTopic(code), {
       config: { presence: { key: "host" }, broadcast: { self: true } },
     });
@@ -2149,6 +2264,18 @@ function Arena({
               : p,
           ),
         );
+      if (dbSessionRef.current)
+        supabase
+          .from("dou_responses")
+          .insert({
+            session_id: dbSessionRef.current,
+            participant_hash: payload.id,
+            question_index: payload.round ?? 0,
+            answer: { index: payload.answer },
+            is_correct: payload.correct,
+            points: payload.points,
+          })
+          .then(() => {});
     });
     channel.on("broadcast", { event: "pulse" }, ({ payload }) => {
       setPulse((old) => ({
@@ -2183,6 +2310,15 @@ function Arena({
         startedAt: Date.now(),
       },
     });
+    if (dbSessionRef.current)
+      supabase
+        .from("dou_sessions")
+        .update({
+          status: next,
+          ended_at: next === "final" ? new Date().toISOString() : null,
+        })
+        .eq("id", dbSessionRef.current)
+        .then(() => {});
   };
   useEffect(() => {
     if (phase !== "question" || paused) return;
@@ -2287,6 +2423,28 @@ function Arena({
                 ⏱ {timeLeft} sn · {answers} yanıt
               </b>
             </div>
+            {type === "Takım Arenası" && (
+              <div className="team-scoreboard">
+                <span>
+                  🔴 Kırmızı{" "}
+                  <b>
+                    {players
+                      .filter((p) => p.team === "Kırmızı")
+                      .reduce((s, p) => s + p.score, 0)}{" "}
+                    XP
+                  </b>
+                </span>
+                <span>
+                  ⚫ Siyah{" "}
+                  <b>
+                    {players
+                      .filter((p) => p.team === "Siyah")
+                      .reduce((s, p) => s + p.score, 0)}{" "}
+                    XP
+                  </b>
+                </span>
+              </div>
+            )}
             <span className="interaction-label">
               {
                 (
@@ -2413,12 +2571,15 @@ function StudentStage({
 }) {
   const cleanCode = code.replace(/\s/g, "");
   const idRef = useRef(
-    typeof crypto !== "undefined" ? crypto.randomUUID() : `${Date.now()}`,
+    typeof window !== "undefined"
+      ? localStorage.getItem(`dou-player-${cleanCode}`) || crypto.randomUUID()
+      : `${Date.now()}`,
   );
   const [status, setStatus] = useState("Oturuma bağlanılıyor…");
   const [phase, setPhase] = useState<GamePhase>("lobby");
   const [round, setRound] = useState(0);
   const [question, setQuestion] = useState<Question>(quiz[0]);
+  const [gameType, setGameType] = useState<GameType>("Quiz");
   const [answer, setAnswer] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
@@ -2430,6 +2591,29 @@ function StudentStage({
   const [openText, setOpenText] = useState("");
   const startedAtRef = useRef(Date.now());
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const team: "Kırmızı" | "Siyah" =
+    idRef.current.charCodeAt(0) % 2 === 0 ? "Kırmızı" : "Siyah";
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`dou-player-${cleanCode}`, idRef.current);
+      const saved = JSON.parse(
+        localStorage.getItem(`dou-progress-${cleanCode}`) || "null",
+      );
+      if (saved) {
+        setScore(saved.score || 0);
+        setStreak(saved.streak || 0);
+      }
+    } catch {}
+  }, [cleanCode]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        `dou-progress-${cleanCode}`,
+        JSON.stringify({ score, streak }),
+      );
+    } catch {}
+  }, [cleanCode, score, streak]);
 
   useEffect(() => {
     const channel = supabase.channel(roomTopic(cleanCode), {
@@ -2440,6 +2624,7 @@ function StudentStage({
       setPhase(payload.phase);
       setRound(payload.round);
       if (payload.question) setQuestion(payload.question);
+      if (payload.type) setGameType(payload.type);
       if (payload.question) setTimeLeft(payload.question.seconds || 20);
       if (payload.startedAt) startedAtRef.current = payload.startedAt;
       setAnswer(null);
@@ -2460,6 +2645,7 @@ function StudentStage({
           id: idRef.current,
           name: name || "Misafir öğrenci",
           score,
+          team,
         });
       }
     });
@@ -2480,7 +2666,10 @@ function StudentStage({
   const choose = (i: number) => {
     if (answer !== null) return;
     setAnswer(i);
-    const correct = i === question.correct;
+    const correct =
+      gameType === "Anket" ||
+      gameType === "Kelime Bulutu" ||
+      i === question.correct;
     const speedBonus = Math.max(
       0,
       400 - Math.floor((Date.now() - startedAtRef.current) / 25),
@@ -2501,6 +2690,7 @@ function StudentStage({
         correct,
         points,
         streak: nextStreak,
+        round,
       },
     });
   };
@@ -2519,6 +2709,17 @@ function StudentStage({
       event: "pulse",
       payload: { kind, id: idRef.current },
     });
+  const answerPin = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (answer !== null || question.kind !== "pin") return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * 100,
+      y = ((e.clientY - r.top) / r.height) * 100;
+    const distance = Math.hypot(
+      x - (question.pinX ?? 50),
+      y - (question.pinY ?? 50),
+    );
+    choose(distance <= 12 ? question.correct : -1);
+  };
 
   return (
     <main className="student-stage">
@@ -2545,7 +2746,11 @@ function StudentStage({
           <div className="student-gamebar">
             <span>🔥 {streak} SERİ</span>
             <b>{score.toLocaleString("tr-TR")} XP</b>
-            <span>SORU {round + 1}</span>
+            <span>
+              {gameType === "Takım Arenası"
+                ? `${team} Takım`
+                : `SORU ${round + 1}`}
+            </span>
           </div>
           <div className="timer">
             <i
@@ -2559,23 +2764,32 @@ function StudentStage({
           </div>
           <h1>{question.q}</h1>
           <span className="student-kind">
-            {
-              (
-                {
-                  choice: "Bir şık seç",
-                  multiple: "Birden fazla şık seç",
-                  truefalse: "Doğru mu, yanlış mı?",
-                  open: "Kısa yanıtını yaz",
-                  ranking: "Doğru sırayı seç",
-                  scale: "Ölçekte değerlendir",
-                  pin: "Görselde doğru noktayı bul",
-                  code: "Kodun çıktısını seç",
-                } as Record<QuestionKind, string>
-              )[question.kind || "choice"]
-            }
+            {gameType === "Kelime Bulutu"
+              ? "Tek kelimeyle katkı ver"
+              : gameType === "Anket"
+                ? "Görüşünü seç · doğru/yanlış yok"
+                : gameType === "Takım Arenası"
+                  ? "Takımın için puan kazan"
+                  : gameType === "Hızlı Görev"
+                    ? "Görevi tamamla ve yanıtla"
+                    : (
+                        {
+                          choice: "Bir şık seç",
+                          multiple: "Birden fazla şık seç",
+                          truefalse: "Doğru mu, yanlış mı?",
+                          open: "Kısa yanıtını yaz",
+                          ranking: "Doğru sırayı seç",
+                          scale: "Ölçekte değerlendir",
+                          pin: "Görselde doğru noktayı bul",
+                          code: "Kodun çıktısını seç",
+                        } as Record<QuestionKind, string>
+                      )[question.kind || "choice"]}
           </span>
           {question.image && (
-            <div className="student-question-image">
+            <div
+              className={`student-question-image ${question.kind === "pin" ? "pin-play" : ""}`}
+              onClick={answerPin}
+            >
               <img src={question.image} alt="Soru görseli" />
             </div>
           )}
@@ -2585,7 +2799,13 @@ function StudentStage({
             </button>
             <span>Doğru seri: 🔥 {streak}</span>
           </div>
-          {question.kind === "open" ? (
+          {question.kind === "pin" ? (
+            <div className="pin-instruction">
+              Görsel üzerinde doğru olduğunu düşündüğün noktaya dokun.
+            </div>
+          ) : question.kind === "open" ||
+            gameType === "Kelime Bulutu" ||
+            gameType === "Hızlı Görev" ? (
             <div className="open-answer">
               <input
                 value={openText}
@@ -2595,10 +2815,12 @@ function StudentStage({
               <button
                 onClick={() =>
                   choose(
-                    openText.trim().toLocaleLowerCase("tr-TR") ===
-                      question.a[question.correct]
-                        ?.trim()
-                        .toLocaleLowerCase("tr-TR")
+                    gameType === "Kelime Bulutu" ||
+                      gameType === "Hızlı Görev" ||
+                      openText.trim().toLocaleLowerCase("tr-TR") ===
+                        question.a[question.correct]
+                          ?.trim()
+                          .toLocaleLowerCase("tr-TR")
                       ? question.correct
                       : -1,
                   )

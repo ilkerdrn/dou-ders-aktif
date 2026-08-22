@@ -3,9 +3,19 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "DOU DersAktif — Sınıfı oyuna dahil et",
-  description: "Canlı quizler, anketler ve takım yarışlarıyla öğrencileri derse dahil et.",
+  description:
+    "Canlı quizler, anketler ve takım yarışlarıyla öğrencileri derse dahil et.",
+  other: {
+    "codex-preview": "development",
+  },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="tr"><body>{children}</body></html>;
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <html lang="tr">
+      <body>{children}</body>
+    </html>
+  );
 }

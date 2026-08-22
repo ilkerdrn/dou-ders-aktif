@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 import { useEffect, useRef, useState } from "react";
 import { roomTopic, supabase } from "@/lib/supabase";
 type View =
@@ -233,7 +234,15 @@ const quiz = [
 export default function Home() {
   const [mode, setMode] = useState<AppMode>("landing"),
     [view, setView] = useState<View>("live"),
-    [activities, setActivities] = useState(starters),
+    [activities, setActivities] = useState<Activity[]>(() => {
+      if (typeof window === "undefined") return starters;
+      try {
+        const saved = localStorage.getItem("dou-activities");
+        return saved ? (JSON.parse(saved) as Activity[]) : starters;
+      } catch {
+        return starters;
+      }
+    }),
     [builder, setBuilder] = useState(false),
     [editing, setEditing] = useState<Activity | null>(null),
     [playing, setPlaying] = useState<GameType | null>(null),
@@ -258,6 +267,10 @@ export default function Home() {
       focus: false,
       hints: false,
     });
+  const notify = (message: string) => {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 2200);
+  };
   useEffect(() => {
     const resolveIdentity = async (
       user: {
@@ -341,10 +354,6 @@ export default function Home() {
     return () => authListener.subscription.unsubscribe();
   }, []);
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("dou-activities");
-      if (saved) setActivities(JSON.parse(saved));
-    } catch {}
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         if (!session?.user) return;
@@ -389,10 +398,6 @@ export default function Home() {
       localStorage.setItem("dou-accessibility", JSON.stringify(accessibility));
     } catch {}
   }, [accessibility]);
-  const notify = (m: string) => {
-    setToast(m);
-    setTimeout(() => setToast(""), 2200);
-  };
   const requestLogin = (intent: AuthIntent) => {
     setAuthIntent(intent);
     setAuthError("");
@@ -1549,7 +1554,7 @@ function LearningRadar() {
     <>
       <div className="radar-hero">
         <div>
-          <span className="overline">DOU'YA ÖZEL KARAR DESTEK</span>
+          <span className="overline">DOU&apos;YA ÖZEL KARAR DESTEK</span>
           <h2>Öğrenme gerçekleşiyor mu?</h2>
           <p>
             Canlı cevapları ders çıktısı, program çıktısı ve Bloom düzeyinde
@@ -1592,7 +1597,7 @@ function LearningRadar() {
             ["Analiz", 55],
             ["Değerlendirme", 42],
             ["Yaratma", 28],
-          ].map(([n, v], i) => (
+          ].map(([n, v]) => (
             <div key={n as string}>
               <span>{n}</span>
               <i style={{ height: `${Number(v) / 1.2}px` }} />
@@ -2879,6 +2884,8 @@ function Arena({
       window.clearInterval(heartbeat);
       supabase.removeChannel(channel);
     };
+    // Oda kanalı, oturum boyunca tek bağlantı olarak kalmalıdır.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const broadcast = (next: GamePhase, nextRound = round) => {
@@ -2923,6 +2930,8 @@ function Arena({
       });
     }, 1000);
     return () => window.clearInterval(timer);
+    // Sayaç yalnızca tur veya duraklatma durumu değiştiğinde yeniden kurulur.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, round, paused]);
   const removePlayer = (id: string) => {
     setPlayers((all) => all.filter((p) => p.id !== id));
@@ -3200,13 +3209,14 @@ function StudentStage({
   onExit: (message?: string) => void;
 }) {
   const cleanCode = code.replace(/\s/g, "");
-  const idRef = useRef(
-    typeof window !== "undefined"
-      ? localStorage.getItem(`dou-player-${cleanCode}`) || crypto.randomUUID()
-      : `${Date.now()}`,
-  );
-  const tabRef = useRef(
-    typeof window !== "undefined" ? crypto.randomUUID() : `${Date.now()}`,
+  const [playerId] = useState(() => {
+    if (typeof window === "undefined") return "server-player";
+    return (
+      localStorage.getItem(`dou-player-${cleanCode}`) || crypto.randomUUID()
+    );
+  });
+  const [tabId] = useState(() =>
+    typeof window === "undefined" ? "server-tab" : crypto.randomUUID(),
   );
   const [status, setStatus] = useState("Oturuma bağlanılıyor…");
   const [connection, setConnection] = useState<
@@ -3217,8 +3227,28 @@ function StudentStage({
   const [question, setQuestion] = useState<Question>(quiz[0]);
   const [gameType, setGameType] = useState<GameType>("Quiz");
   const [answer, setAnswer] = useState<number | null>(null);
-  const [score, setScore] = useState(0);
-  const [streak, setStreak] = useState(0);
+  const [score, setScore] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    try {
+      return Number(
+        JSON.parse(localStorage.getItem(`dou-progress-${cleanCode}`) || "null")
+          ?.score || 0,
+      );
+    } catch {
+      return 0;
+    }
+  });
+  const [streak, setStreak] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    try {
+      return Number(
+        JSON.parse(localStorage.getItem(`dou-progress-${cleanCode}`) || "null")
+          ?.streak || 0,
+      );
+    } catch {
+      return 0;
+    }
+  });
   const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
   const [timeLeft, setTimeLeft] = useState(20);
   const [fiftyUsed, setFiftyUsed] = useState(false);
@@ -3228,13 +3258,20 @@ function StudentStage({
   const [selectedMany, setSelectedMany] = useState<number[]>([]);
   const [rankOrder, setRankOrder] = useState<number[]>([0, 1, 2, 3]);
   const [inputError, setInputError] = useState("");
-  const [supports, setSupports] = useState<Partial<AccessibilityPrefs>>({});
-  const startedAtRef = useRef(Date.now());
+  const [supports] = useState<Partial<AccessibilityPrefs>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      return JSON.parse(localStorage.getItem("dou-accessibility") || "{}");
+    } catch {
+      return {};
+    }
+  });
+  const startedAtRef = useRef(0);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const hostSeenAtRef = useRef(0);
   const roomReadyRef = useRef(false);
   const team: "Kırmızı" | "Siyah" =
-    idRef.current.charCodeAt(0) % 2 === 0 ? "Kırmızı" : "Siyah";
+    playerId.charCodeAt(0) % 2 === 0 ? "Kırmızı" : "Siyah";
 
   useEffect(() => {
     const key = `dou-active-tab-${cleanCode}`;
@@ -3246,7 +3283,7 @@ function StudentStage({
         } | null;
         if (
           current &&
-          current.tab !== tabRef.current &&
+          current.tab !== tabId &&
           Date.now() - current.at < 9000
         ) {
           onExit("Bu oturum aynı cihazda başka bir sekmede zaten açık.");
@@ -3254,7 +3291,7 @@ function StudentStage({
         }
         localStorage.setItem(
           key,
-          JSON.stringify({ tab: tabRef.current, at: Date.now() }),
+          JSON.stringify({ tab: tabId, at: Date.now() }),
         );
         return true;
       } catch {
@@ -3267,26 +3304,17 @@ function StudentStage({
       window.clearInterval(lease);
       try {
         const current = JSON.parse(localStorage.getItem(key) || "null");
-        if (current?.tab === tabRef.current) localStorage.removeItem(key);
+        if (current?.tab === tabId) localStorage.removeItem(key);
       } catch {}
     };
-  }, [cleanCode]);
+  }, [cleanCode, onExit, tabId]);
 
   useEffect(() => {
     try {
-      setSupports(
-        JSON.parse(localStorage.getItem("dou-accessibility") || "{}"),
-      );
-      localStorage.setItem(`dou-player-${cleanCode}`, idRef.current);
-      const saved = JSON.parse(
-        localStorage.getItem(`dou-progress-${cleanCode}`) || "null",
-      );
-      if (saved) {
-        setScore(saved.score || 0);
-        setStreak(saved.streak || 0);
-      }
+      localStorage.setItem(`dou-player-${cleanCode}`, playerId);
+      startedAtRef.current = Date.now();
     } catch {}
-  }, [cleanCode]);
+  }, [cleanCode, playerId]);
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -3298,7 +3326,7 @@ function StudentStage({
 
   useEffect(() => {
     const channel = supabase.channel(roomTopic(cleanCode), {
-      config: { presence: { key: idRef.current } },
+      config: { presence: { key: playerId } },
     });
     channelRef.current = channel;
     channel.on("broadcast", { event: "room-ready" }, () => {
@@ -3343,7 +3371,7 @@ function StudentStage({
         );
     });
     channel.on("broadcast", { event: "moderation" }, ({ payload }) => {
-      if (payload.action === "remove" && payload.id === idRef.current)
+      if (payload.action === "remove" && payload.id === playerId)
         onExit("Akademisyen tarafından oturumdan çıkarıldın.");
     });
     channel.on("broadcast", { event: "spotlight" }, ({ payload }) => {
@@ -3356,13 +3384,13 @@ function StudentStage({
         channel.send({
           type: "broadcast",
           event: "room-probe",
-          payload: { id: idRef.current, at: Date.now() },
+          payload: { id: playerId, at: Date.now() },
         });
         const safeName = validateParticipantName(name)
           ? "Katılımcı"
           : name.trim().replace(/\s+/g, " ");
         channel.track({
-          id: idRef.current,
+          id: playerId,
           name: safeName,
           score,
           team,
@@ -3391,7 +3419,7 @@ function StudentStage({
       window.clearInterval(connectionWatch);
       supabase.removeChannel(channel);
     };
-  }, [cleanCode, name, supports.extraTime]);
+  }, [cleanCode, name, onExit, playerId, score, supports.extraTime, team]);
 
   useEffect(() => {
     if (phase !== "question") return;
@@ -3425,7 +3453,7 @@ function StudentStage({
       type: "broadcast",
       event: "answer",
       payload: {
-        id: idRef.current,
+        id: playerId,
         answer: i,
         correct,
         points,
@@ -3488,7 +3516,7 @@ function StudentStage({
     channelRef.current?.send({
       type: "broadcast",
       event: "pulse",
-      payload: { kind, id: idRef.current },
+      payload: { kind, id: playerId },
     });
   const answerPin = (e: React.MouseEvent<HTMLDivElement>) => {
     if (answer !== null || question.kind !== "pin") return;

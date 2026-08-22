@@ -3862,7 +3862,8 @@ function Landing({
           <a href="#araclar">Etkinlikler</a>
           <a href="#nasil">Nasıl çalışır?</a>
           <button className="student-login-link" onClick={studentLogin}>
-            {identity ? "Öğrenci panelim" : "Öğrenci girişi"}
+            <span>🎓</span>
+            <b>{identity ? "Öğrenci panelim" : "Öğrenci girişi"}</b>
           </button>
           <button className="ghost" onClick={teacher}>
             {identity?.role === "instructor"

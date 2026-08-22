@@ -3143,11 +3143,32 @@ button {
 
 /* V9 · Microsoft 365 kurumsal kimlik ve rol panelleri */
 .student-login-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
   border: 0;
-  background: transparent;
-  color: var(--ink);
-  font-weight: 750;
+  border-radius: 12px;
+  background: var(--red);
+  color: #fff;
+  padding: 10px 14px;
+  font-weight: 800;
   cursor: pointer;
+  box-shadow: 0 5px 0 #8d071b;
+  transition:
+    transform 0.18s,
+    box-shadow 0.18s;
+}
+.student-login-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 7px 0 #8d071b;
+}
+.student-login-link:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #8d071b;
+}
+.student-login-link b {
+  font-size: 12px;
 }
 .auth-overlay {
   position: fixed;
@@ -3373,8 +3394,21 @@ button {
   place-items: center;
   font-weight: 800;
 }
-.auth-guard > div { display: flex; flex-direction: column; align-items: center; gap: 14px; }
-.auth-guard button { border: 0; border-radius: 12px; background: var(--red); color: #fff; padding: 12px 18px; font-weight: 800; cursor: pointer; }
+.auth-guard > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.auth-guard button {
+  border: 0;
+  border-radius: 12px;
+  background: var(--red);
+  color: #fff;
+  padding: 12px 18px;
+  font-weight: 800;
+  cursor: pointer;
+}
 .account-chip {
   display: flex;
   align-items: center;
@@ -3693,7 +3727,18 @@ button {
 }
 @media (max-width: 600px) {
   .student-login-link {
-    display: none;
+    display: inline-flex;
+    min-height: 38px;
+    padding: 8px 10px;
+    gap: 5px;
+    box-shadow: 0 3px 0 #8d071b;
+  }
+  .student-login-link b {
+    font-size: 0;
+  }
+  .student-login-link b:after {
+    content: "Öğrenci";
+    font-size: 10px;
   }
   .auth-overlay {
     padding: 12px;
@@ -5527,10 +5572,22 @@ button {
     min-height: 68px;
     gap: 10px;
   }
+  .old-home .topbar > .wordmark {
+    transform: scale(0.86);
+    transform-origin: left center;
+    margin-right: -15px;
+  }
   .old-home .topbar .ghost {
-    padding: 10px 11px;
-    font-size: 11px;
+    padding: 9px 8px;
+    font-size: 0;
     white-space: nowrap;
+  }
+  .old-home .topbar .ghost:after {
+    content: "Akademisyen";
+    font-size: 10px;
+  }
+  .old-home .topbar > div {
+    gap: 7px;
   }
   .old-home .hero {
     margin-top: 18px;

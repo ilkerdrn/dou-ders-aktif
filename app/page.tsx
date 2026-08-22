@@ -409,7 +409,10 @@ export default function Home() {
       <StudentStage
         name={studentName}
         code={code || "481 209"}
-        onExit={() => setMode(identity ? "student-dashboard" : "landing")}
+        onExit={(message) => {
+          setMode(identity ? "student-dashboard" : "landing");
+          if (message) notify(message);
+        }}
       />
     );
   if (mode === "student-dashboard" && identity)
@@ -2737,7 +2740,14 @@ function Arena({
   );
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const dbSessionRef = useRef<string | null>(null);
+  const phaseRef = useRef<GamePhase>("lobby");
+  const roundRef = useRef(0);
   const current = gameQuestions[round % gameQuestions.length];
+
+  useEffect(() => {
+    phaseRef.current = phase;
+    roundRef.current = round;
+  }, [phase, round]);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -2763,13 +2773,22 @@ function Arena({
       const live = Object.values(state)
         .flat()
         .filter((p) => p.id !== "host");
-      setPlayers((old) =>
-        live.map((p) => ({
-          ...p,
-          name: validateParticipantName(p.name) ? "Katılımcı" : p.name,
-          score: old.find((x) => x.id === p.id)?.score || 0,
-        })),
-      );
+      setPlayers((old) => {
+        const names = new Map<string, number>();
+        return live.map((p) => {
+          const safeName = validateParticipantName(p.name)
+            ? "Katılımcı"
+            : p.name;
+          const key = safeName.toLocaleLowerCase("tr-TR");
+          const count = (names.get(key) || 0) + 1;
+          names.set(key, count);
+          return {
+            ...p,
+            name: count > 1 ? `${safeName} (${count})` : safeName,
+            score: old.find((x) => x.id === p.id)?.score || 0,
+          };
+        });
+      });
     });
     channel.on("broadcast", { event: "answer" }, ({ payload }) => {
       setAnswers((v) => v + 1);
@@ -2819,11 +2838,47 @@ function Arena({
         [payload.kind]: (old[payload.kind as keyof typeof old] || 0) + 1,
       }));
     });
-    channel.subscribe((status) => {
-      if (status === "SUBSCRIBED")
-        channel.track({ id: "host", name: "Akademisyen", score: 0 });
+    channel.on("broadcast", { event: "room-probe" }, () => {
+      const activeRound = roundRef.current;
+      channel.send({
+        type: "broadcast",
+        event: "room-ready",
+        payload: { title, type, phase: phaseRef.current },
+      });
+      channel.send({
+        type: "broadcast",
+        event: "game-state",
+        payload: {
+          phase: phaseRef.current,
+          round: activeRound,
+          title,
+          type,
+          question: gameQuestions[activeRound % gameQuestions.length],
+          startedAt: Date.now(),
+        },
+      });
     });
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        channel.track({ id: "host", name: "Akademisyen", score: 0 });
+        channel.send({
+          type: "broadcast",
+          event: "host-heartbeat",
+          payload: { at: Date.now() },
+        });
+      }
+    });
+    const heartbeat = window.setInterval(
+      () =>
+        channel.send({
+          type: "broadcast",
+          event: "host-heartbeat",
+          payload: { at: Date.now() },
+        }),
+      3000,
+    );
     return () => {
+      window.clearInterval(heartbeat);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -2879,6 +2934,20 @@ function Arena({
       payload: { action: "remove", id },
     });
   };
+  const endSession = () => {
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "session-ended",
+      payload: { message: "Akademisyen oturumu sonlandırdı." },
+    });
+    if (dbSessionRef.current)
+      supabase
+        .from("dou_sessions")
+        .update({ status: "final", ended_at: new Date().toISOString() })
+        .eq("id", dbSessionRef.current)
+        .then(() => {});
+    window.setTimeout(close, 120);
+  };
   const sorted = [...players].sort((a, b) => b.score - a.score);
 
   return (
@@ -2898,7 +2967,7 @@ function Arena({
             <button onClick={() => setProjection((v) => !v)}>
               {projection ? "Kontrole dön" : "▣ Projeksiyon"}
             </button>
-            <button onClick={close}>Bitir ×</button>
+            <button onClick={endSession}>Bitir ×</button>
           </div>
         </header>
         {phase === "lobby" && (
@@ -3113,7 +3182,7 @@ function Arena({
                 </article>
               ))}
             </div>
-            <button className="primary" onClick={close}>
+            <button className="primary" onClick={endSession}>
               Raporu görüntüle →
             </button>
           </section>
@@ -3130,7 +3199,7 @@ function StudentStage({
 }: {
   name: string;
   code: string;
-  onExit: () => void;
+  onExit: (message?: string) => void;
 }) {
   const cleanCode = code.replace(/\s/g, "");
   const idRef = useRef(
@@ -3138,7 +3207,13 @@ function StudentStage({
       ? localStorage.getItem(`dou-player-${cleanCode}`) || crypto.randomUUID()
       : `${Date.now()}`,
   );
+  const tabRef = useRef(
+    typeof window !== "undefined" ? crypto.randomUUID() : `${Date.now()}`,
+  );
   const [status, setStatus] = useState("Oturuma bağlanılıyor…");
+  const [connection, setConnection] = useState<
+    "checking" | "live" | "reconnecting"
+  >("checking");
   const [phase, setPhase] = useState<GamePhase>("lobby");
   const [round, setRound] = useState(0);
   const [question, setQuestion] = useState<Question>(quiz[0]);
@@ -3158,8 +3233,46 @@ function StudentStage({
   const [supports, setSupports] = useState<Partial<AccessibilityPrefs>>({});
   const startedAtRef = useRef(Date.now());
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const hostSeenAtRef = useRef(0);
+  const roomReadyRef = useRef(false);
   const team: "Kırmızı" | "Siyah" =
     idRef.current.charCodeAt(0) % 2 === 0 ? "Kırmızı" : "Siyah";
+
+  useEffect(() => {
+    const key = `dou-active-tab-${cleanCode}`;
+    const claim = () => {
+      try {
+        const current = JSON.parse(localStorage.getItem(key) || "null") as {
+          tab: string;
+          at: number;
+        } | null;
+        if (
+          current &&
+          current.tab !== tabRef.current &&
+          Date.now() - current.at < 9000
+        ) {
+          onExit("Bu oturum aynı cihazda başka bir sekmede zaten açık.");
+          return false;
+        }
+        localStorage.setItem(
+          key,
+          JSON.stringify({ tab: tabRef.current, at: Date.now() }),
+        );
+        return true;
+      } catch {
+        return true;
+      }
+    };
+    if (!claim()) return;
+    const lease = window.setInterval(claim, 4000);
+    return () => {
+      window.clearInterval(lease);
+      try {
+        const current = JSON.parse(localStorage.getItem(key) || "null");
+        if (current?.tab === tabRef.current) localStorage.removeItem(key);
+      } catch {}
+    };
+  }, [cleanCode]);
 
   useEffect(() => {
     try {
@@ -3190,6 +3303,22 @@ function StudentStage({
       config: { presence: { key: idRef.current } },
     });
     channelRef.current = channel;
+    channel.on("broadcast", { event: "room-ready" }, () => {
+      roomReadyRef.current = true;
+      hostSeenAtRef.current = Date.now();
+      setConnection("live");
+      setStatus("Canlı odaya güvenle bağlandın");
+    });
+    channel.on("broadcast", { event: "host-heartbeat" }, () => {
+      hostSeenAtRef.current = Date.now();
+      if (roomReadyRef.current) {
+        setConnection("live");
+        setStatus("Canlı bağlantı aktif");
+      }
+    });
+    channel.on("broadcast", { event: "session-ended" }, ({ payload }) => {
+      onExit(payload?.message || "Oturum sona erdi.");
+    });
     channel.on("broadcast", { event: "game-state" }, ({ payload }) => {
       setPhase(payload.phase);
       setRound(payload.round);
@@ -3216,7 +3345,8 @@ function StudentStage({
         );
     });
     channel.on("broadcast", { event: "moderation" }, ({ payload }) => {
-      if (payload.action === "remove" && payload.id === idRef.current) onExit();
+      if (payload.action === "remove" && payload.id === idRef.current)
+        onExit("Akademisyen tarafından oturumdan çıkarıldın.");
     });
     channel.on("broadcast", { event: "spotlight" }, ({ payload }) => {
       setSpotlight(payload.message);
@@ -3224,7 +3354,12 @@ function StudentStage({
     });
     channel.subscribe((s) => {
       if (s === "SUBSCRIBED") {
-        setStatus("Canlı odaya bağlandın");
+        setStatus("Aktif oturum doğrulanıyor…");
+        channel.send({
+          type: "broadcast",
+          event: "room-probe",
+          payload: { id: idRef.current, at: Date.now() },
+        });
         const safeName = validateParticipantName(name)
           ? "Katılımcı"
           : name.trim().replace(/\s+/g, " ");
@@ -3234,9 +3369,28 @@ function StudentStage({
           score,
           team,
         });
+      } else if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") {
+        setConnection("reconnecting");
+        setStatus("Bağlantı yenileniyor…");
       }
     });
+    const validationTimeout = window.setTimeout(() => {
+      if (!roomReadyRef.current)
+        onExit("Bu kodla aktif bir akademisyen oturumu bulunamadı.");
+    }, 7500);
+    const connectionWatch = window.setInterval(() => {
+      if (!roomReadyRef.current) return;
+      const silence = Date.now() - hostSeenAtRef.current;
+      if (silence > 18000) {
+        onExit("Akademisyen bağlantısı kapandı. Oturumdan güvenle ayrıldın.");
+      } else if (silence > 8000) {
+        setConnection("reconnecting");
+        setStatus("Akademisyen bağlantısı aranıyor…");
+      }
+    }, 2500);
     return () => {
+      window.clearTimeout(validationTimeout);
+      window.clearInterval(connectionWatch);
       supabase.removeChannel(channel);
     };
   }, [cleanCode, name, supports.extraTime]);
@@ -3360,8 +3514,19 @@ function StudentStage({
       </header>
       {phase === "lobby" ? (
         <section className="student-wait">
-          <span className="pulse-dot">●</span>
-          <h1>{name || "Katılımcı"}, oyundasın!</h1>
+          <span className={`pulse-dot connection-${connection}`}>●</span>
+          <div className={`connection-badge ${connection}`}>
+            {connection === "live"
+              ? "● CANLI BAĞLANTI"
+              : connection === "reconnecting"
+                ? "↻ YENİDEN BAĞLANIYOR"
+                : "◌ OTURUM DOĞRULANIYOR"}
+          </div>
+          <h1>
+            {connection === "live"
+              ? `${name || "Katılımcı"}, oyundasın!`
+              : "Sınıf aranıyor…"}
+          </h1>
           <p>
             {status}
             <br />
@@ -3591,7 +3756,7 @@ function StudentStage({
           <p>Yeni tur için ekrana bak.</p>
         </section>
       )}
-      <button className="back" onClick={onExit}>
+      <button className="back" onClick={() => onExit()}>
         ← Oturumdan ayrıl
       </button>
     </main>

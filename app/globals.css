@@ -2503,6 +2503,33 @@ button {
   }
 }
 
+.connection-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.connection-badge.checking {
+  background: #ffffff17;
+  color: #e5dfe2;
+}
+.connection-badge.live {
+  background: #0f9f7525;
+  color: #74f3c9;
+}
+.connection-badge.reconnecting {
+  background: #f4a52425;
+  color: #ffd078;
+}
+.pulse-dot.connection-checking,
+.pulse-dot.connection-reconnecting {
+  color: #f5a524;
+}
+
 /* Restored original homepage with DOU DersAktif wordmark */
 .wordmark {
   gap: 5px;

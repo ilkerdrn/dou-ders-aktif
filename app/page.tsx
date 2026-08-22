@@ -403,6 +403,28 @@ export default function Home() {
     setAuthError("");
     setAuthOpen(true);
   };
+  const enterDemo = (intent: AuthIntent) => {
+    const demoIdentity: Identity = {
+      id: `demo-${intent}`,
+      email:
+        intent === "instructor"
+          ? "demo.akademisyen@dogus.edu.tr"
+          : "demo.ogrenci@dogus.edu.tr",
+      fullName:
+        intent === "instructor" ? "Demo Akademisyen" : "Demo Öğrenci",
+      role: intent,
+    };
+    setIdentity(demoIdentity);
+    setStudentName(demoIdentity.fullName);
+    setAuthOpen(false);
+    setAuthError("");
+    setMode(intent === "instructor" ? "teacher" : "student-dashboard");
+    notify(
+      intent === "instructor"
+        ? "Akademisyen demo paneli açıldı"
+        : "Öğrenci demo paneli açıldı",
+    );
+  };
   const signOut = async () => {
     await supabase.auth.signOut();
     setIdentity(null);
@@ -475,6 +497,7 @@ export default function Home() {
             setIntent={setAuthIntent}
             loading={authLoading}
             error={authError}
+            demo={enterDemo}
             close={() => {
               setAuthOpen(false);
               setAuthError("");
@@ -3793,12 +3816,14 @@ function MicrosoftAuthDialog({
   setIntent,
   loading,
   error,
+  demo,
   close,
 }: {
   intent: AuthIntent;
   setIntent: (value: AuthIntent) => void;
   loading: boolean;
   error: string;
+  demo: (intent: AuthIntent) => void;
   close: () => void;
 }) {
   const [connecting, setConnecting] = useState(false);
@@ -3893,6 +3918,19 @@ function MicrosoftAuthDialog({
             : "Microsoft 365 ile giriş yap"}
           <em>→</em>
         </button>
+        <div className="demo-access">
+          <span>veya</span>
+          <button onClick={() => demo(intent)} disabled={connecting}>
+            <i>▶</i>
+            <b>
+              {intent === "instructor"
+                ? "Akademisyen demosunu aç"
+                : "Öğrenci demosunu aç"}
+            </b>
+            <em>→</em>
+          </button>
+          <small>Hesap gerekmez · Örnek verilerle hemen keşfet</small>
+        </div>
         <div className="auth-domain">
           <i>✓</i>
           <span>

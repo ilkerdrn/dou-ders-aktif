@@ -1399,7 +1399,7 @@ function GameHub({ notify }: { notify: (s: string) => void }) {
               </article>
             ))}
         </section>
-        <aside className="panel powerups">
+        <aside className="panel director-cards">
           <small>OYUN YÖNETMENİ</small>
           <h3>Canlı güç kartları</h3>
           {[
@@ -2951,40 +2951,93 @@ function Landing({
             <span>Kurulum yok · Tarayıcıdan katılım</span>
           </div>
         </div>
-        <div className="join-card">
-          <div className="campus-mark">
-            ÜNİVERSİTE
-            <br />
-            <b>ETKİLEŞİM AĞI</b>
+        <div className="hero-stage">
+          <div className="hero-orbit orbit-one">◆</div>
+          <div className="hero-orbit orbit-two">✦</div>
+          <div className="floating-proof proof-score">
+            <span>🔥 SERİ</span>
+            <b>+1.240 XP</b>
+            <small>3 doğru cevap</small>
           </div>
-          <span className="join-label">ÖĞRENCİ KATILIMI</span>
-          <h2>Derse bağlan</h2>
-          <p>Tahtadaki altı haneli oturum kodunu gir.</p>
-          <label>Oturum kodu</label>
-          <input
-            value={code}
-            onChange={(e) =>
-              setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-            }
-            placeholder="000 000"
-            inputMode="numeric"
-          />
-          <label>Görünen ad</label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Ad Soyad"
-          />
-          <button onClick={join}>Oturuma katıl →</button>
-          <small>Öğrenci hesabı gerektirmez</small>
+          <div className="floating-proof proof-live">
+            <i>●</i>
+            <span>
+              <b>42 öğrenci</b>
+              <small>şu an bağlı</small>
+            </span>
+          </div>
+          <div className="join-card">
+            <div className="campus-mark">
+              ÜNİVERSİTE
+              <br />
+              <b>ETKİLEŞİM AĞI</b>
+            </div>
+            <span className="join-label">ÖĞRENCİ KATILIMI</span>
+            <h2>Derse bağlan</h2>
+            <p>Tahtadaki altı haneli oturum kodunu gir.</p>
+            <label>Oturum kodu</label>
+            <input
+              value={code}
+              onChange={(e) =>
+                setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              placeholder="000 000"
+              inputMode="numeric"
+            />
+            <label>Görünen ad</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ad Soyad"
+            />
+            <button onClick={join}>Oturuma katıl →</button>
+            <small>Öğrenci hesabı gerektirmez</small>
+          </div>
+          <div className="mini-leader">
+            <span>1</span>
+            <i>İD</i>
+            <b>İlker</b>
+            <em>4.820 XP</em>
+          </div>
         </div>
       </section>
       <section className="ticker">
-        <span>◆ CANLI QUIZ</span>
-        <span>◌ KELİME BULUTU</span>
-        <span>▥ ANLIK ANKET</span>
-        <span>♛ TAKIM ARENASI</span>
-        <span>✦ HIZLI GÖREV</span>
+        <div className="ticker-track">
+          {[0, 1].map((n) => (
+            <div key={n}>
+              <span>◆ CANLI QUIZ</span>
+              <span>◌ KELİME BULUTU</span>
+              <span>▥ ANLIK ANKET</span>
+              <span>♛ TAKIM ARENASI</span>
+              <span>✦ HIZLI GÖREV</span>
+              <span>◎ ÖĞRENME RADARI</span>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="live-proof-strip">
+        <div>
+          <strong>6 sn</strong>
+          <span>ortalama katılım süresi</span>
+        </div>
+        <div>
+          <strong>%91</strong>
+          <span>sınıf içi aktif katılım</span>
+        </div>
+        <div>
+          <strong>8+</strong>
+          <span>etkileşim ve soru biçimi</span>
+        </div>
+        <div className="pulse-demo">
+          <span>CANLI SINIF NABZI</span>
+          <i>
+            <em />
+            <em />
+            <em />
+            <em />
+            <em />
+          </i>
+        </div>
       </section>
       <section id="araclar" className="tools">
         <small>AKADEMİK ODAK, AKTİF KATILIM</small>

@@ -1,6 +1,6 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { roomTopic, supabase } from "@/lib/supabase";
 type View =
   | "live"
@@ -1237,6 +1237,66 @@ function Reports() {
           ))}
         </div>
       </article>
+      <section className="learning-insights">
+        <article className="panel insight-card priority">
+          <span className="overline">OTOMATİK ÖĞRENME AÇIĞI</span>
+          <h3>Öğrencilerin %31’i döngü koşullarında zorlandı.</h3>
+          <p>
+            Yanlışların çoğu <b>ÖÇ-2 · Uygulama</b> düzeyindeki iki soruda
+            yoğunlaşıyor. Sadece puanı değil, müdahale edilecek kazanımı
+            gösterir.
+          </p>
+          <div className="insight-actions">
+            <button>8 öğrenciye tekrar ata</button>
+            <button>Soruları incele →</button>
+          </div>
+        </article>
+        <article className="panel difficult-questions">
+          <div className="panel-title">
+            <div>
+              <small>MADDE ANALİZİ</small>
+              <h3>En zor sorular</h3>
+            </div>
+            <b>Canlı</b>
+          </div>
+          {[
+            ["Soru 4", "while koşulu", 43, "ÖÇ-2"],
+            ["Soru 7", "break / continue", 57, "ÖÇ-3"],
+            ["Soru 2", "range başlangıcı", 68, "ÖÇ-1"],
+          ].map(([number, title, success, outcome]) => (
+            <div className="difficulty-row" key={number}>
+              <span>
+                <b>{number}</b>
+                <small>{title}</small>
+              </span>
+              <i>
+                <em style={{ width: `${success}%` }} />
+              </i>
+              <strong>%{success}</strong>
+              <mark>{outcome}</mark>
+            </div>
+          ))}
+        </article>
+        <article className="panel followup-card">
+          <span className="overline">AKILLI TAKİP</span>
+          <h3>Ders sonrası önerilen akış</h3>
+          <ol>
+            <li>
+              <b>1</b>
+              <span>Yanlışları kısa anlatımla tekrar göster</span>
+            </li>
+            <li>
+              <b>2</b>
+              <span>Benzer iki soruluk pekiştirme gönder</span>
+            </li>
+            <li>
+              <b>3</b>
+              <span>Sonucu ÖÇ–PÇ kanıtına işle</span>
+            </li>
+          </ol>
+          <button>Takip çalışması oluştur →</button>
+        </article>
+      </section>
     </>
   );
 }
@@ -1342,6 +1402,20 @@ function Assignments({
   activities: Activity[];
   notify: (s: string) => void;
 }) {
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState(
+    String(activities[0]?.id || ""),
+  );
+  const [course, setCourse] = useState("BMT203");
+  const [dueDate, setDueDate] = useState("2026-09-07");
+  const [attempts, setAttempts] = useState(2);
+  const [feedback, setFeedback] = useState("Son teslimden sonra");
+  const [settings, setSettings] = useState({
+    shuffle: true,
+    leaderboard: false,
+    retryWrong: true,
+    accommodations: true,
+  });
   const [items, setItems] = useState([
     {
       title: "Python Döngüleri Tekrarı",
@@ -1350,6 +1424,9 @@ function Assignments({
       done: 34,
       total: 42,
       status: "Yayında",
+      mode: "Öğrenci hızında",
+      attempts: 2,
+      insight: "8 öğrenci tekrar etmeli",
     },
     {
       title: "Linux Yetkilendirme",
@@ -1358,6 +1435,9 @@ function Assignments({
       done: 21,
       total: 36,
       status: "Yayında",
+      mode: "Öğrenci hızında",
+      attempts: 1,
+      insight: "Yetkilendirme sorusu zorlandı",
     },
     {
       title: "Arayüz Tasarım İlkeleri",
@@ -1366,22 +1446,36 @@ function Assignments({
       done: 0,
       total: 38,
       status: "Taslak",
+      mode: "Öğrenci hızında",
+      attempts: 2,
+      insight: "Henüz veri yok",
     },
   ]);
   const create = () => {
-    const a = activities[0];
+    const a =
+      activities.find((activity) => String(activity.id) === selectedActivity) ||
+      activities[0];
     setItems((v) => [
       {
         title: a?.title || "Yeni çalışma",
-        course: "BMT203",
-        due: "7 gün",
+        course,
+        due: dueDate
+          ? new Intl.DateTimeFormat("tr-TR", {
+              day: "numeric",
+              month: "short",
+            }).format(new Date(`${dueDate}T12:00:00`))
+          : "Süresiz",
         done: 0,
         total: 42,
-        status: "Taslak",
+        status: "Yayında",
+        mode: "Öğrenci hızında",
+        attempts,
+        insight: `${feedback} · ${settings.retryWrong ? "yanlışları tekrar açık" : "tek akış"}`,
       },
       ...v,
     ]);
-    notify("Etkinlik ödeve dönüştürüldü");
+    setComposerOpen(false);
+    notify("Öğrenci hızındaki çalışma yayınlandı");
   };
   return (
     <>
@@ -1393,10 +1487,106 @@ function Assignments({
             Etkinlikleri ödeve çevirin, son tarih ve tamamlama durumunu izleyin.
           </p>
         </div>
-        <button className="primary" onClick={create}>
+        <button className="primary" onClick={() => setComposerOpen((v) => !v)}>
           ＋ Etkinlikten ödev
         </button>
       </div>
+      {composerOpen && (
+        <section className="assignment-composer panel">
+          <div className="composer-heading">
+            <div>
+              <span className="overline">YENİ ASENKRON ÇALIŞMA</span>
+              <h3>Öğrencinin kendi hızında tamamlayacağı akışı ayarla</h3>
+            </div>
+            <button onClick={() => setComposerOpen(false)}>×</button>
+          </div>
+          <div className="composer-fields">
+            <label>
+              Etkinlik
+              <select
+                value={selectedActivity}
+                onChange={(e) => setSelectedActivity(e.target.value)}
+              >
+                {activities.map((activity) => (
+                  <option key={activity.id} value={String(activity.id)}>
+                    {activity.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Ders / şube
+              <select
+                value={course}
+                onChange={(e) => setCourse(e.target.value)}
+              >
+                <option>BMT203</option>
+                <option>BMT311</option>
+                <option>BMT218</option>
+              </select>
+            </label>
+            <label>
+              Son teslim
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </label>
+            <label>
+              Deneme hakkı
+              <select
+                value={attempts}
+                onChange={(e) => setAttempts(Number(e.target.value))}
+              >
+                <option value={1}>1 deneme</option>
+                <option value={2}>2 deneme</option>
+                <option value={3}>3 deneme</option>
+              </select>
+            </label>
+            <label>
+              Cevap açıklama
+              <select
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+              >
+                <option>Her sorudan sonra</option>
+                <option>Çalışma bitince</option>
+                <option>Son teslimden sonra</option>
+              </select>
+            </label>
+          </div>
+          <div className="composer-switches">
+            {[
+              ["shuffle", "Soruları ve şıkları karıştır"],
+              ["retryWrong", "Yanlış soruları yeniden denet"],
+              ["accommodations", "Bireysel destek profillerini uygula"],
+              ["leaderboard", "Ödev sıralamasını öğrenciye göster"],
+            ].map(([key, label]) => (
+              <label key={key}>
+                <input
+                  type="checkbox"
+                  checked={settings[key as keyof typeof settings]}
+                  onChange={(e) =>
+                    setSettings({ ...settings, [key]: e.target.checked })
+                  }
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+          <footer>
+            <small>
+              {activities.find((a) => String(a.id) === selectedActivity)
+                ?.questions || 0}{" "}
+              soru · {attempts} deneme · {feedback.toLocaleLowerCase("tr-TR")}
+            </small>
+            <button className="primary" onClick={create}>
+              Yayınla →
+            </button>
+          </footer>
+        </section>
+      )}
       <div className="assignment-list panel">
         {items.map((x, i) => (
           <article key={i}>
@@ -1408,6 +1598,10 @@ function Assignments({
                 {x.course} · Son: {x.due}
               </small>
               <h3>{x.title}</h3>
+              <span className="assignment-meta">
+                {x.mode} · {x.attempts} deneme
+              </span>
+              <small className="assignment-insight">✦ {x.insight}</small>
             </div>
             <div className="assignment-progress">
               <b>
@@ -4271,6 +4465,55 @@ function StudentDashboard({
             <span>Başarılarını görünür kıl</span>
           </div>
         </article>
+      </section>
+      <section className="student-workspace">
+        <div className="student-workspace-head">
+          <div>
+            <span className="portal-kicker">KENDİ HIZINDA ÇALIŞMALAR</span>
+            <h2>Bu hafta seni bekleyenler</h2>
+          </div>
+          <button>Tümünü gör →</button>
+        </div>
+        <div className="student-assignment-grid">
+          {[
+            {
+              course: "BMT203 · Python Programlama",
+              title: "Döngüler Tekrarı",
+              due: "7 Eylül · 23.59",
+              questions: 8,
+              progress: 0,
+              accent: "#d70926",
+            },
+            {
+              course: "BMT311 · Sunucu İşletim Sistemleri",
+              title: "Linux Yetkilendirme",
+              due: "9 Eylül · 23.59",
+              questions: 6,
+              progress: 50,
+              accent: "#6c4df6",
+            },
+          ].map((work) => (
+            <article
+              key={work.title}
+              style={{ "--work-accent": work.accent } as CSSProperties}
+            >
+              <span>{work.course}</span>
+              <h3>{work.title}</h3>
+              <div>
+                <small>{work.questions} soru · 2 deneme</small>
+                <b>{work.due}</b>
+              </div>
+              <i>
+                <em style={{ width: `${work.progress}%` }} />
+              </i>
+              <button
+                onClick={() => alert(`${work.title} çalışma ekranı açıldı`)}
+              >
+                {work.progress ? "Devam et" : "Çalışmaya başla"} <b>→</b>
+              </button>
+            </article>
+          ))}
+        </div>
       </section>
       <section className="portal-empty">
         <span>✦</span>

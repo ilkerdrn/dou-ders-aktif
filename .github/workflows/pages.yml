@@ -1,6 +1,7 @@
 name: Deploy GitHub Pages
 
 # DOU DersAktif deployment workflow · 2026-08-22
+# Production hardening deployment · 2026-08-28
 on:
   push:
     branches: [main]

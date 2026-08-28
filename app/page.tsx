@@ -23,6 +23,7 @@ type Identity = {
   fullName: string;
   role: AuthIntent;
 };
+const DEMO_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DEMO === "true";
 type QuestionKind =
   | "choice"
   | "multiple"
@@ -430,9 +431,44 @@ export default function Home() {
     setMode("landing");
     notify("Kurumsal oturum kapatıldı");
   };
+  const persistActivity = async (activity: Activity) => {
+    if (
+      !identity ||
+      identity.role !== "instructor" ||
+      identity.id.startsWith("demo-")
+    )
+      return;
+    const payload = {
+      owner_id: identity.id,
+      title: activity.title,
+      game_type: activity.type,
+      content: activity.content || [],
+      outcome_map: { shuffle: activity.shuffle || false },
+      updated_at: new Date().toISOString(),
+    };
+    const isUuid =
+      typeof activity.id === "string" && /^[0-9a-f-]{36}$/i.test(activity.id);
+    const query = isUuid
+      ? supabase
+          .from("dou_activities")
+          .update(payload)
+          .eq("id", activity.id)
+          .select("id")
+          .single()
+      : supabase.from("dou_activities").insert(payload).select("id").single();
+    const { data, error } = await query;
+    if (error) notify("Etkinlik buluta kaydedilemedi");
+    else if (!isUuid && data?.id)
+      setActivities((all) =>
+        all.map((item) =>
+          item.id === activity.id ? { ...item, id: data.id } : item,
+        ),
+      );
+  };
   if (mode === "student")
     return (
       <StudentStage
+        identity={identity}
         name={studentName}
         code={code || "481 209"}
         onExit={(message) => {
@@ -668,6 +704,16 @@ export default function Home() {
             }}
             remove={(a) => {
               setActivities((v) => v.filter((x) => x.id !== a.id));
+              if (
+                identity &&
+                typeof a.id === "string" &&
+                /^[0-9a-f-]{36}$/i.test(a.id)
+              )
+                void supabase
+                  .from("dou_activities")
+                  .delete()
+                  .eq("id", a.id)
+                  .eq("owner_id", identity.id);
               if (selected.id === a.id) setSelected(starters[0]);
               notify("Etkinlik silindi");
             }}
@@ -708,12 +754,14 @@ export default function Home() {
             setBuilder(false);
             setView("activities");
             setEditing(null);
+            void persistActivity(a);
             notify(editing ? "Etkinlik güncellendi!" : "Etkinlik kaydedildi!");
           }}
         />
       )}
       {playing && (
         <Arena
+          identity={identity}
           type={playing}
           title={selected.title}
           questions={selected.content || quiz}
@@ -2728,12 +2776,14 @@ type Player = {
 const optionMarks = ["▲", "◆", "●", "■"];
 
 function Arena({
+  identity,
   type,
   title,
   questions = quiz,
   shuffle = false,
   close,
 }: {
+  identity: Identity;
   type: GameType;
   title: string;
   questions?: Question[];
@@ -2775,136 +2825,138 @@ function Arena({
   }, [phase, round]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return;
-      const { data: session } = await supabase
-        .from("dou_sessions")
-        .insert({
-          owner_id: data.user.id,
-          join_code: code,
-          status: "lobby",
-          started_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-      if (session) dbSessionRef.current = session.id;
-    });
-    const channel = supabase.channel(roomTopic(code), {
-      config: { presence: { key: "host" }, broadcast: { self: true } },
-    });
-    channelRef.current = channel;
-    channel.on("presence", { event: "sync" }, () => {
-      const state = channel.presenceState<Player>();
-      const live = Object.values(state)
-        .flat()
-        .filter((p) => p.id !== "host");
-      setPlayers((old) => {
-        const names = new Map<string, number>();
-        return live.map((p) => {
-          const safeName = validateParticipantName(p.name)
-            ? "Katılımcı"
-            : p.name;
-          const key = safeName.toLocaleLowerCase("tr-TR");
-          const count = (names.get(key) || 0) + 1;
-          names.set(key, count);
-          return {
-            ...p,
-            name: count > 1 ? `${safeName} (${count})` : safeName,
-            score: old.find((x) => x.id === p.id)?.score || 0,
-          };
-        });
-      });
-    });
-    channel.on("broadcast", { event: "answer" }, ({ payload }) => {
-      setAnswers((v) => v + 1);
-      setAnswerStats((old) =>
-        old.map((n, i) => (i === payload.answer ? n + 1 : n)),
-      );
-      if (payload.answerText)
-        setCloudWords((old) => {
-          const clean = String(payload.answerText).trim().slice(0, 40);
-          const found = old.find(
-            (w) =>
-              w.text.toLocaleLowerCase("tr-TR") ===
-              clean.toLocaleLowerCase("tr-TR"),
-          );
-          return found
-            ? old.map((w) => (w === found ? { ...w, count: w.count + 1 } : w))
-            : [...old, { text: clean, count: 1 }];
-        });
-      if (payload.correct)
-        setPlayers((old) =>
-          old.map((p) =>
-            p.id === payload.id
-              ? {
-                  ...p,
-                  score: p.score + payload.points,
-                  streak: payload.streak,
-                }
-              : p,
-          ),
-        );
-      if (dbSessionRef.current)
-        supabase
-          .from("dou_responses")
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let heartbeat = 0;
+    let responsePoll = 0;
+    let cancelled = false;
+    const isDemo = identity.id.startsWith("demo-");
+
+    const start = async () => {
+      if (!isDemo) {
+        const { data: session, error } = await supabase
+          .from("dou_sessions")
           .insert({
-            session_id: dbSessionRef.current,
-            participant_hash: payload.id,
-            question_index: payload.round ?? 0,
-            answer: { index: payload.answer },
-            is_correct: payload.correct,
-            points: payload.points,
+            owner_id: identity.id,
+            join_code: code,
+            status: "lobby",
+            started_at: new Date().toISOString(),
+            activity_title: title,
+            game_type: type,
+            questions: gameQuestions,
           })
-          .then(() => {});
-    });
-    channel.on("broadcast", { event: "pulse" }, ({ payload }) => {
-      setPulse((old) => ({
-        ...old,
-        [payload.kind]: (old[payload.kind as keyof typeof old] || 0) + 1,
-      }));
-    });
-    channel.on("broadcast", { event: "room-probe" }, () => {
-      const activeRound = roundRef.current;
-      channel.send({
-        type: "broadcast",
-        event: "room-ready",
-        payload: { title, type, phase: phaseRef.current },
-      });
-      channel.send({
-        type: "broadcast",
-        event: "game-state",
-        payload: {
-          phase: phaseRef.current,
-          round: activeRound,
-          title,
-          type,
-          question: gameQuestions[activeRound % gameQuestions.length],
-          startedAt: Date.now(),
+          .select("id")
+          .single();
+        if (error || !session || cancelled) return;
+        dbSessionRef.current = session.id;
+      }
+
+      channel = supabase.channel(roomTopic(code), {
+        config: {
+          private: !isDemo,
+          presence: { key: "host" },
+          broadcast: { self: true, ack: true },
         },
       });
-    });
-    channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") {
-        channel.track({ id: "host", name: "Akademisyen", score: 0 });
-        channel.send({
+      channelRef.current = channel;
+      channel.on("presence", { event: "sync" }, () => {
+        if (!channel) return;
+        const state = channel.presenceState<Player>();
+        const live = Object.values(state)
+          .flat()
+          .filter((p) => p.id !== "host");
+        setPlayers((old) =>
+          live.map((p) => ({
+            ...p,
+            name: validateParticipantName(p.name) ? "Katılımcı" : p.name,
+            score: old.find((x) => x.id === p.id)?.score || 0,
+          })),
+        );
+      });
+      channel.on("broadcast", { event: "pulse" }, ({ payload }) => {
+        setPulse((old) => ({
+          ...old,
+          [payload.kind]: (old[payload.kind as keyof typeof old] || 0) + 1,
+        }));
+      });
+      channel.on("broadcast", { event: "answer" }, ({ payload }) => {
+        if (!isDemo) return;
+        setAnswers((v) => v + 1);
+        setAnswerStats((old) =>
+          old.map((n, i) => (i === payload.answer ? n + 1 : n)),
+        );
+      });
+      channel.subscribe((status) => {
+        if (status === "SUBSCRIBED" && channel)
+          channel.track({ id: "host", name: "Akademisyen", score: 0 });
+      });
+
+      const publishState = () => {
+        const activeRound = roundRef.current;
+        channel?.send({
+          type: "broadcast",
+          event: "room-ready",
+          payload: { title, type, phase: phaseRef.current },
+        });
+        channel?.send({
+          type: "broadcast",
+          event: "game-state",
+          payload: {
+            phase: phaseRef.current,
+            round: activeRound,
+            title,
+            type,
+            question: gameQuestions[activeRound % gameQuestions.length],
+            startedAt: Date.now(),
+          },
+        });
+        channel?.send({
           type: "broadcast",
           event: "host-heartbeat",
           payload: { at: Date.now() },
         });
-      }
-    });
-    const heartbeat = window.setInterval(
-      () =>
-        channel.send({
-          type: "broadcast",
-          event: "host-heartbeat",
-          payload: { at: Date.now() },
-        }),
-      3000,
-    );
+      };
+      publishState();
+      heartbeat = window.setInterval(publishState, 3000);
+
+      if (!isDemo)
+        responsePoll = window.setInterval(async () => {
+          if (!dbSessionRef.current) return;
+          const [{ data: rows }, { data: members }] = await Promise.all([
+            supabase
+              .from("dou_responses")
+              .select("answer,question_index")
+              .eq("session_id", dbSessionRef.current)
+              .eq("question_index", roundRef.current),
+            supabase
+              .from("dou_session_participants")
+              .select("user_id,display_name,score,streak")
+              .eq("session_id", dbSessionRef.current),
+          ]);
+          const currentRows = rows || [];
+          setAnswers(currentRows.length);
+          setAnswerStats(
+            [0, 1, 2, 3].map(
+              (index) =>
+                currentRows.filter((r) => r.answer?.index === index).length,
+            ),
+          );
+          if (members)
+            setPlayers(
+              members.map((p) => ({
+                id: p.user_id,
+                name: p.display_name,
+                score: p.score,
+                streak: p.streak,
+              })),
+            );
+        }, 900);
+    };
+    start();
     return () => {
+      cancelled = true;
       window.clearInterval(heartbeat);
-      supabase.removeChannel(channel);
+      window.clearInterval(responsePoll);
+      if (channel) supabase.removeChannel(channel);
     };
     // Oda kanalı, oturum boyunca tek bağlantı olarak kalmalıdır.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2916,7 +2968,9 @@ function Arena({
     setAnswers(0);
     setAnswerStats([0, 0, 0, 0]);
     setCloudWords([]);
-    setTimeLeft(gameQuestions[nextRound % gameQuestions.length].seconds || 20);
+    const seconds =
+      gameQuestions[nextRound % gameQuestions.length].seconds || 20;
+    setTimeLeft(seconds);
     channelRef.current?.send({
       type: "broadcast",
       event: "game-state",
@@ -2934,7 +2988,15 @@ function Arena({
         .from("dou_sessions")
         .update({
           status: next,
+          current_round: nextRound,
+          round_started_at:
+            next === "question" ? new Date().toISOString() : null,
+          round_ends_at:
+            next === "question"
+              ? new Date(Date.now() + seconds * 1000).toISOString()
+              : null,
           ended_at: next === "final" ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString(),
         })
         .eq("id", dbSessionRef.current)
         .then(() => {});
@@ -2957,6 +3019,13 @@ function Arena({
   }, [phase, round, paused]);
   const removePlayer = (id: string) => {
     setPlayers((all) => all.filter((p) => p.id !== id));
+    if (dbSessionRef.current)
+      supabase
+        .from("dou_session_participants")
+        .update({ removed_at: new Date().toISOString() })
+        .eq("session_id", dbSessionRef.current)
+        .eq("user_id", id)
+        .then(() => {});
     channelRef.current?.send({
       type: "broadcast",
       event: "moderation",
@@ -3222,10 +3291,12 @@ function Arena({
 }
 
 function StudentStage({
+  identity,
   name,
   code,
   onExit,
 }: {
+  identity: Identity | null;
   name: string;
   code: string;
   onExit: (message?: string) => void;
@@ -3293,6 +3364,7 @@ function StudentStage({
   });
   const startedAtRef = useRef(0);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
   const hostSeenAtRef = useRef(0);
   const roomReadyRef = useRef(false);
   const pendingResultRef = useRef<{
@@ -3355,113 +3427,190 @@ function StudentStage({
   }, [cleanCode, score, streak]);
 
   useEffect(() => {
-    const channel = supabase.channel(roomTopic(cleanCode), {
-      config: { presence: { key: playerId } },
-    });
-    channelRef.current = channel;
-    channel.on("broadcast", { event: "room-ready" }, () => {
-      roomReadyRef.current = true;
-      hostSeenAtRef.current = Date.now();
-      setConnection("live");
-      setStatus("Canlı odaya güvenle bağlandın");
-    });
-    channel.on("broadcast", { event: "host-heartbeat" }, () => {
-      hostSeenAtRef.current = Date.now();
-      if (roomReadyRef.current) {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let validationTimeout = 0;
+    let connectionWatch = 0;
+    let cancelled = false;
+    const isDemo = identity?.id.startsWith("demo-") ?? false;
+    const start = async () => {
+      if (!isDemo) {
+        if (!identity) {
+          onExit("Oturuma katılmak için kurumsal hesabınla giriş yapmalısın.");
+          return;
+        }
+        const { data, error } = await supabase.rpc("dou_join_session", {
+          p_join_code: cleanCode,
+          p_display_name: name,
+        });
+        if (error || !data?.[0]) {
+          onExit(
+            "Bu kodla aktif bir oturum bulunamadı veya katılım yetkin yok.",
+          );
+          return;
+        }
+        sessionIdRef.current = data[0].session_id;
+      }
+      if (cancelled) return;
+      channel = supabase.channel(roomTopic(cleanCode), {
+        config: {
+          private: !isDemo,
+          presence: { key: isDemo ? playerId : identity?.id || playerId },
+          broadcast: { ack: true },
+        },
+      });
+      channelRef.current = channel;
+      channel.on("broadcast", { event: "room-ready" }, () => {
+        roomReadyRef.current = true;
+        hostSeenAtRef.current = Date.now();
         setConnection("live");
-        setStatus("Canlı bağlantı aktif");
-      }
-    });
-    channel.on("broadcast", { event: "session-ended" }, ({ payload }) => {
-      onExit(payload?.message || "Oturum sona erdi.");
-    });
-    channel.on("broadcast", { event: "game-state" }, ({ payload }) => {
-      setPhase(payload.phase);
-      setRound(payload.round);
-      if (payload.question) setQuestion(payload.question);
-      if (payload.type) setGameType(payload.type);
-      if (payload.question)
-        setTimeLeft(
-          Math.round(
-            (payload.question.seconds || 20) * (supports.extraTime ? 1.5 : 1),
-          ),
-        );
-      if (payload.startedAt) startedAtRef.current = payload.startedAt;
-      if (payload.phase === "leaderboard" && pendingResultRef.current) {
-        const result = pendingResultRef.current;
-        setFeedback(result.feedback);
-        setRevealedPoints(result.points);
-        setStreak(result.streak);
-        if (result.points) setScore((value) => value + result.points);
-        pendingResultRef.current = null;
-      }
-      if (payload.phase === "question") {
-        pendingResultRef.current = null;
-        setAnswer(null);
-        setFeedback(null);
-        setRevealedPoints(0);
-        setHiddenOptions([]);
-        setSelectedMany([]);
-        setOpenText("");
-        setInputError("");
-      }
-      if (payload.question?.kind === "ranking")
-        setRankOrder(
-          payload.question.a
-            .map((_: string, i: number) => i)
-            .sort(() => Math.random() - 0.5),
-        );
-    });
-    channel.on("broadcast", { event: "moderation" }, ({ payload }) => {
-      if (payload.action === "remove" && payload.id === playerId)
-        onExit("Akademisyen tarafından oturumdan çıkarıldın.");
-    });
-    channel.on("broadcast", { event: "spotlight" }, ({ payload }) => {
-      setSpotlight(payload.message);
-      window.setTimeout(() => setSpotlight(""), 2200);
-    });
-    channel.subscribe((s) => {
-      if (s === "SUBSCRIBED") {
-        setStatus("Aktif oturum doğrulanıyor…");
-        channel.send({
-          type: "broadcast",
-          event: "room-probe",
-          payload: { id: playerId, at: Date.now() },
-        });
-        const safeName = validateParticipantName(name)
-          ? "Katılımcı"
-          : name.trim().replace(/\s+/g, " ");
-        channel.track({
-          id: playerId,
-          name: safeName,
-          score,
-          team,
-        });
-      } else if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") {
-        setConnection("reconnecting");
-        setStatus("Bağlantı yenileniyor…");
-      }
-    });
-    const validationTimeout = window.setTimeout(() => {
-      if (!roomReadyRef.current)
-        onExit("Bu kodla aktif bir akademisyen oturumu bulunamadı.");
-    }, 7500);
-    const connectionWatch = window.setInterval(() => {
-      if (!roomReadyRef.current) return;
-      const silence = Date.now() - hostSeenAtRef.current;
-      if (silence > 18000) {
-        onExit("Akademisyen bağlantısı kapandı. Oturumdan güvenle ayrıldın.");
-      } else if (silence > 8000) {
-        setConnection("reconnecting");
-        setStatus("Akademisyen bağlantısı aranıyor…");
-      }
-    }, 2500);
+        setStatus("Canlı odaya güvenle bağlandın");
+      });
+      channel.on("broadcast", { event: "host-heartbeat" }, () => {
+        hostSeenAtRef.current = Date.now();
+        if (roomReadyRef.current) {
+          setConnection("live");
+          setStatus("Canlı bağlantı aktif");
+        }
+      });
+      channel.on("broadcast", { event: "session-ended" }, ({ payload }) => {
+        onExit(payload?.message || "Oturum sona erdi.");
+      });
+      channel.on("broadcast", { event: "game-state" }, async ({ payload }) => {
+        setPhase(payload.phase);
+        setRound(payload.round);
+        if (payload.question) setQuestion(payload.question);
+        if (payload.type) setGameType(payload.type);
+        if (payload.question)
+          setTimeLeft(
+            Math.round(
+              (payload.question.seconds || 20) * (supports.extraTime ? 1.5 : 1),
+            ),
+          );
+        if (payload.startedAt) startedAtRef.current = payload.startedAt;
+        if (
+          payload.phase === "leaderboard" &&
+          !isDemo &&
+          sessionIdRef.current
+        ) {
+          const [{ data: response }, { data: member }] = await Promise.all([
+            supabase
+              .from("dou_responses")
+              .select("is_correct,points")
+              .eq("session_id", sessionIdRef.current)
+              .eq("question_index", payload.round)
+              .eq("user_id", identity?.id)
+              .maybeSingle(),
+            supabase
+              .from("dou_session_participants")
+              .select("score,streak")
+              .eq("session_id", sessionIdRef.current)
+              .eq("user_id", identity?.id)
+              .maybeSingle(),
+          ]);
+          if (response && member) {
+            setFeedback(
+              payload.type === "Anket" || payload.type === "Kelime Bulutu"
+                ? "neutral"
+                : response.is_correct
+                  ? "correct"
+                  : "wrong",
+            );
+            setRevealedPoints(response.points || 0);
+            setScore(member.score || 0);
+            setStreak(member.streak || 0);
+          }
+        } else if (
+          payload.phase === "leaderboard" &&
+          pendingResultRef.current
+        ) {
+          const result = pendingResultRef.current;
+          setFeedback(result.feedback);
+          setRevealedPoints(result.points);
+          setStreak(result.streak);
+          if (result.points) setScore((value) => value + result.points);
+          pendingResultRef.current = null;
+        }
+        if (payload.phase === "question") {
+          pendingResultRef.current = null;
+          setAnswer(null);
+          setFeedback(null);
+          setRevealedPoints(0);
+          setHiddenOptions([]);
+          setSelectedMany([]);
+          setOpenText("");
+          setInputError("");
+        }
+        if (payload.question?.kind === "ranking")
+          setRankOrder(
+            payload.question.a
+              .map((_: string, i: number) => i)
+              .sort(() => Math.random() - 0.5),
+          );
+      });
+      channel.on("broadcast", { event: "moderation" }, ({ payload }) => {
+        if (
+          payload.action === "remove" &&
+          payload.id === (isDemo ? playerId : identity?.id)
+        )
+          onExit("Akademisyen tarafından oturumdan çıkarıldın.");
+      });
+      channel.on("broadcast", { event: "spotlight" }, ({ payload }) => {
+        setSpotlight(payload.message);
+        window.setTimeout(() => setSpotlight(""), 2200);
+      });
+      channel.subscribe((s) => {
+        if (s === "SUBSCRIBED") {
+          setStatus("Aktif oturum doğrulanıyor…");
+          const safeName = validateParticipantName(name)
+            ? "Katılımcı"
+            : name.trim().replace(/\s+/g, " ");
+          channel?.track({
+            id: isDemo ? playerId : identity?.id || playerId,
+            name: safeName,
+            score,
+            team,
+          });
+        } else if (
+          s === "CHANNEL_ERROR" ||
+          s === "TIMED_OUT" ||
+          s === "CLOSED"
+        ) {
+          setConnection("reconnecting");
+          setStatus("Bağlantı yenileniyor…");
+        }
+      });
+      validationTimeout = window.setTimeout(() => {
+        if (!roomReadyRef.current)
+          onExit("Bu kodla aktif bir akademisyen oturumu bulunamadı.");
+      }, 7500);
+      connectionWatch = window.setInterval(() => {
+        if (!roomReadyRef.current) return;
+        const silence = Date.now() - hostSeenAtRef.current;
+        if (silence > 18000) {
+          onExit("Akademisyen bağlantısı kapandı. Oturumdan güvenle ayrıldın.");
+        } else if (silence > 8000) {
+          setConnection("reconnecting");
+          setStatus("Akademisyen bağlantısı aranıyor…");
+        }
+      }, 2500);
+    };
+    start();
     return () => {
+      cancelled = true;
       window.clearTimeout(validationTimeout);
       window.clearInterval(connectionWatch);
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
-  }, [cleanCode, name, onExit, playerId, score, supports.extraTime, team]);
+  }, [
+    cleanCode,
+    identity,
+    name,
+    onExit,
+    playerId,
+    score,
+    supports.extraTime,
+    team,
+  ]);
 
   useEffect(() => {
     if (phase !== "question") return;
@@ -3472,9 +3621,35 @@ function StudentStage({
     return () => window.clearInterval(timer);
   }, [phase, round]);
 
-  const choose = (i: number, answerText?: string, forcedCorrect?: boolean) => {
+  const choose = async (
+    i: number,
+    answerText?: string,
+    forcedCorrect?: boolean,
+    answerPayload?: Record<string, unknown>,
+  ) => {
     if (answer !== null || timeLeft <= 0) return;
     setAnswer(i);
+    const isDemo = identity?.id.startsWith("demo-") ?? false;
+    if (!isDemo && sessionIdRef.current) {
+      const payload = answerPayload || {
+        index: i,
+        ...(answerText ? { text: answerText } : {}),
+      };
+      const { error } = await supabase.rpc("dou_submit_answer", {
+        p_session_id: sessionIdRef.current,
+        p_question_index: round,
+        p_answer: payload,
+      });
+      if (error) {
+        setAnswer(null);
+        setInputError(
+          error.message.includes("already_answered")
+            ? "Bu soru için cevabın zaten kaydedildi."
+            : "Cevap süresi kapandı veya yanıt kaydedilemedi.",
+        );
+      }
+      return;
+    }
     const correct =
       forcedCorrect ??
       (gameType === "Anket" ||
@@ -3538,6 +3713,7 @@ function StudentStage({
       question.correct,
       undefined,
       [...selectedMany].sort().join(",") === expected,
+      { indexes: [...selectedMany].sort((a, b) => a - b) },
     );
   };
   const moveRank = (at: number, dir: number) =>
@@ -3572,7 +3748,10 @@ function StudentStage({
       x - (question.pinX ?? 50),
       y - (question.pinY ?? 50),
     );
-    choose(distance <= 12 ? question.correct : -1);
+    choose(distance <= 12 ? question.correct : -1, undefined, distance <= 12, {
+      x,
+      y,
+    });
   };
 
   return (
@@ -3757,6 +3936,7 @@ function StudentStage({
                     question.correct,
                     undefined,
                     rankOrder.every((x, i) => x === i),
+                    { indexes: rankOrder },
                   )
                 }
                 disabled={answer !== null}
@@ -3965,19 +4145,21 @@ function MicrosoftAuthDialog({
             : "Microsoft 365 ile giriş yap"}
           <em>→</em>
         </button>
-        <div className="demo-access">
-          <span>veya</span>
-          <button onClick={() => demo(intent)} disabled={connecting}>
-            <i>▶</i>
-            <b>
-              {intent === "instructor"
-                ? "Akademisyen demosunu aç"
-                : "Öğrenci demosunu aç"}
-            </b>
-            <em>→</em>
-          </button>
-          <small>Hesap gerekmez · Örnek verilerle hemen keşfet</small>
-        </div>
+        {DEMO_ENABLED && (
+          <div className="demo-access">
+            <span>veya</span>
+            <button onClick={() => demo(intent)} disabled={connecting}>
+              <i>▶</i>
+              <b>
+                {intent === "instructor"
+                  ? "Akademisyen demosunu aç"
+                  : "Öğrenci demosunu aç"}
+              </b>
+              <em>→</em>
+            </button>
+            <small>Hesap gerekmez · Örnek verilerle hemen keşfet</small>
+          </div>
+        )}
         <div className="auth-domain">
           <i>✓</i>
           <span>

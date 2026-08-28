@@ -28,6 +28,7 @@ jobs:
       - run: npm run build:pages
         env:
           NEXT_PUBLIC_BASE_PATH: /dou-ders-aktif
+          NEXT_PUBLIC_ENABLE_DEMO: "true"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
